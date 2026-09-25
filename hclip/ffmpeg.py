@@ -227,6 +227,7 @@ def build_cut_cmd(
     precise: bool = False,
     reencode_audio: bool = False,
     is_concat: bool = False,
+    hevc: bool = False,
 ) -> list[str]:
     """One clip. ``-ss`` before ``-i`` makes the seek near-instant on huge
     files. With stream copy the clip starts on the keyframe at or before
@@ -245,6 +246,9 @@ def build_cut_cmd(
                 "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k"]
     else:
         cmd += ["-c:v", "copy"]
+        if hevc:
+            # iPhone HEVC: Apple players (Photos, QuickTime) need the hvc1 tag.
+            cmd += ["-tag:v", "hvc1"]
         cmd += ["-c:a", "aac", "-b:a", "192k"] if reencode_audio else ["-c:a", "copy"]
         cmd += ["-avoid_negative_ts", "make_zero"]
     cmd += [

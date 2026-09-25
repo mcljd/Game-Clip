@@ -9,3 +9,4 @@ vendor/
 ffmpeg_x/
 ffmpeg.zip
 selftest.txt
+web/vendor/

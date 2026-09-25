@@ -1,0 +1,189 @@
+[
+ {
+  "name": "real Dunloy note",
+  "text": "Dunloy clips\n1:52-2:10\n3:05-3:33\n5:41-5:57\n6:23-7:07\n7:34-8:09\n12:36-13:05\n14:08-14:29\n16:20-16:34\n17:24-17:36\n19:19-19:34\n25:03-25:37\n\n\n2nd Half Video\n3:04-3:37\n5:55-6:30\n9:32-9:46\n15:07-15:39\n",
+  "title": "Dunloy clips",
+  "sections": [
+   [
+    "h1",
+    11
+   ],
+   [
+    "h2",
+    4
+   ]
+  ],
+  "problems": []
+ },
+ {
+  "name": "separators, spacing, labels",
+  "text": "1:52 - 2:10\n3:05–3:33 Goal Conor\n4:00 to 4:20: point\n5:00—5:10",
+  "title": "",
+  "sections": [
+   [
+    "h1",
+    4
+   ]
+  ],
+  "problems": [],
+  "clips": [
+   [
+    112,
+    130,
+    ""
+   ],
+   [
+    185,
+    213,
+    "Goal Conor"
+   ],
+   [
+    240,
+    260,
+    "point"
+   ],
+   [
+    300,
+    310,
+    ""
+   ]
+  ]
+ },
+ {
+  "name": "periods",
+  "text": "Cushendall v St Endas\nFirst half\n1:00-1:10\nSecond Half\n2:00-2:10\nExtra time 1\n0:30-0:40\nET2\n1:00-1:20\nPenalties\n0:10-0:20",
+  "title": "Cushendall v St Endas",
+  "sections": [
+   [
+    "h1",
+    1
+   ],
+   [
+    "h2",
+    1
+   ],
+   [
+    "et1",
+    1
+   ],
+   [
+    "et2",
+    1
+   ],
+   [
+    "pens",
+    1
+   ]
+  ],
+  "problems": []
+ },
+ {
+  "name": "plain text after clips = new video",
+  "text": "Dunloy\n1:00-1:10\nSecond video\n2:00-2:10",
+  "title": "Dunloy",
+  "sections": [
+   [
+    "h1",
+    1
+   ],
+   [
+    "part2",
+    1
+   ]
+  ],
+  "problems": []
+ },
+ {
+  "name": "errors keep line numbers",
+  "text": "Title\n1:52-1:40\n1:75-2:00\n3:05-\n4:00-4:10",
+  "title": "Title",
+  "sections": [
+   [
+    "h1",
+    1
+   ]
+  ],
+  "problems": [
+   [
+    2,
+    true
+   ],
+   [
+    3,
+    true
+   ],
+   [
+    4,
+    true
+   ]
+  ]
+ },
+ {
+  "name": "long and overlapping",
+  "text": "1:00-3:00\n2:30-2:50",
+  "title": "",
+  "sections": [
+   [
+    "h1",
+    2
+   ]
+  ],
+  "problems": [
+   [
+    1,
+    false
+   ],
+   [
+    2,
+    false
+   ]
+  ]
+ },
+ {
+  "name": "hours and dot separator, windows line endings",
+  "text": "1:02:03-1:02:30\r\n1.52-2.10\r\n",
+  "title": "",
+  "sections": [
+   [
+    "h1",
+    2
+   ]
+  ],
+  "problems": [],
+  "clips": [
+   [
+    3723,
+    3750,
+    ""
+   ],
+   [
+    112,
+    130,
+    ""
+   ]
+  ]
+ },
+ {
+  "name": "duplicate section names get unique tags",
+  "text": "2nd half\n1:00-1:10\n2nd half\n2:00-2:10",
+  "title": "",
+  "sections": [
+   [
+    "h2",
+    1
+   ],
+   [
+    "h2_2",
+    1
+   ]
+  ],
+  "problems": []
+ },
+ {
+  "name": "empty",
+  "text": "\n\n",
+  "title": "",
+  "sections": [],
+  "problems": []
+ }
+]

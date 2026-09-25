@@ -44,6 +44,32 @@ add more timings later), just press *Make clips* again.
 If the window won't open on an older PC, install Microsoft's free
 [Edge WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703).
 
+## On iPhone (or any browser): the web version
+
+The same tool runs in Safari on iPhone, and in Chrome or Edge on a computer,
+with nothing to install. It lives in `web/` and is published to GitHub Pages.
+
+- **Nothing is uploaded.** ffmpeg runs inside the browser (WebAssembly) and
+  reads only the parts of the video it needs, so a 4 GB+ half is fine.
+  (Tested: a clip cut from past the 4 GB mark of a 4.3 GB file in under 3 s.)
+- **Paste** the timings (the Paste button reads the clipboard), choose a
+  video per half, tap **Make clips**.
+- Clips are kept on the phone until you tap **Save all to Photos or Files**
+  (the iPhone share sheet) or save them one at a time. They survive the page
+  reloading, and Make clips carries on where it stopped.
+- On iPhone, tap *Share → Add to Home Screen* to get an app icon.
+- Keep the screen open while clips are made: iPhone pauses pages in the
+  background. The page asks the phone not to sleep.
+
+Things to know on iPhone:
+- Choose videos from the **Files** app where you can. Picking a huge video
+  from **Photos** makes iOS prepare a copy first, which can take minutes and
+  needs free space.
+- The first visit downloads the video tools (about 30 MB); after that they're
+  cached.
+- iPhone HEVC video is copied with the tag Apple's players need, so clips
+  play in Photos.
+
 ## How it handles big match videos
 
 - **Nothing is uploaded or loaded into memory.** ffmpeg reads the video
@@ -117,6 +143,24 @@ pip install -e ".[app]"      # then: gaa-clips   (opens the window; Mac/Windows)
 Integration tests generate small test videos with ffmpeg's `testsrc`, so no
 real footage is needed. They are skipped if ffmpeg isn't installed.
 
+### The web version
+
+```bash
+web/fetch-vendor.sh                  # pinned ffmpeg.wasm into web/vendor/ (~32 MB, not committed)
+python3 -m http.server -d web 8000   # then open http://localhost:8000
+node --test tests/web/*.test.js      # parser tests (same cases as the Python parser)
+pytest tests/test_web_e2e.py         # full flow in headless Chromium (needs playwright)
+```
+
+`web/notes.js` is a port of `hclip/notes.py`; both are checked against
+`tests/data/note_cases.json`, so a fix to one that isn't made to the other
+fails CI.
+
+**Publishing:** `.github/workflows/pages.yml` publishes `web/` whenever
+`main` changes. One-time setup: *Settings → Pages → Source: GitHub Actions*.
+GitHub Pages on a **private** repository needs a paid GitHub plan; otherwise
+make the repository public or host `web/` anywhere that serves static files.
+
 ### Building the Windows app
 
 GitHub Actions (`.github/workflows/build.yml`) does this on every push: it
@@ -140,4 +184,10 @@ hclip/
   app/ui.html   the coach's window
   app/main.py   opens it with pywebview; --selftest for packaged builds
 packaging/      PyInstaller spec + Inno Setup installer script
+web/
+  index.html    the phone/browser page
+  notes.js      note parser (twin of notes.py)
+  engine.js     ffmpeg.wasm cutting (same command as ffmpeg.py)
+  store.js      keeps finished clips on the device (IndexedDB)
+  app.js        page logic
 ```

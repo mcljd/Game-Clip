@@ -104,3 +104,9 @@ def test_find_binary_prefers_bundled_copy(monkeypatch, tmp_path):
     monkeypatch.setattr("sys._MEIPASS", str(tmp_path), raising=False)
     monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/" + name)
     assert ffmpeg.find_binary("ffprobe") == str(exe)
+
+
+def test_hevc_gets_apple_tag_in_copy_mode_only():
+    cmd = ffmpeg.build_cut_cmd("ffmpeg", "iphone.mov", 0, 5, "o", hevc=True)
+    assert cmd[cmd.index("-tag:v") + 1] == "hvc1"
+    assert "-tag:v" not in ffmpeg.build_cut_cmd("ffmpeg", "i.mov", 0, 5, "o", hevc=True, precise=True)

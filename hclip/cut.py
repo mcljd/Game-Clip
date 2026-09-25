@@ -22,6 +22,7 @@ class HalfVideo:
     files: list[Path]
     duration: float
     reencode_audio: bool
+    hevc: bool = False
     _concat_list: Path | None = None
 
     @classmethod
@@ -34,6 +35,7 @@ class HalfVideo:
             files=ordered,
             duration=sum(i.duration for i in infos),
             reencode_audio=any(i.audio_needs_reencode for i in infos),
+            hevc=infos[0].video_codec == "hevc",
         )
 
     @property
@@ -182,7 +184,7 @@ def run(
         cmd = ffmpeg.build_cut_cmd(
             ff, job.half.source(), job.start, job.duration, part,
             precise=precise, reencode_audio=job.half.reencode_audio,
-            is_concat=job.half.is_concat,
+            is_concat=job.half.is_concat, hevc=job.half.hevc,
         )
 
         def progress(secs: float, job: Job = job, i: int = i) -> None:
