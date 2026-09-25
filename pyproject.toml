@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hclip"
+version = "0.1.0"
+description = "Cut GAA match clips from a coach's list of timings"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+hclip = "hclip.cli:main"
+
+[tool.setuptools]
+packages = ["hclip"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: needs real ffmpeg/ffprobe"]

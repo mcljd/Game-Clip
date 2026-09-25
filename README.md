@@ -1,1 +1,111 @@
-# Game-Clip
+# Game-Clip (`hclip`)
+
+Cut GAA match clips (hurling, football, camogie) from full-match videos using
+the list of timings a coach types into their phone.
+
+The coach writes something like this in Notes:
+
+```
+Dunloy clips
+1:52-2:10
+3:05-3:33 point from play
+...
+2nd Half Video
+3:04-3:37
+5:55-6:30
+```
+
+and gets one file per clip, numbered in match order:
+
+```
+01_h1_01m52-02m10.mp4
+02_h1_03m05-03m33_point_from_play.mp4
+...
+12_h2_03m04-03m37.mp4
+```
+
+> **Status:** the cutting engine and a command line are done and tested. The
+> Windows app for coaches (add videos, paste timings, press *Make clips*) is
+> the next step, built on the same engine.
+
+## How it handles big match videos
+
+- **Nothing is uploaded or loaded into memory.** ffmpeg reads the video
+  straight off the disk or SD card and writes each clip directly, so a 15 GB
+  half uses the same memory as a 1 GB one.
+- **Fast by default.** Clips are stream-copied: no re-encoding, no quality
+  loss, a few seconds per clip. The catch is that a clip starts on the nearest
+  keyframe *at or before* the coach's start time, so it may begin a second or
+  two early. It never starts late. Use `--precise` for frame-accurate cuts
+  (re-encodes, much slower).
+- **One video per half, or several.** Each section of the note (1st half,
+  2nd half, extra time, penalties) is matched to its own video in order. A half
+  split across several camera files (GoPro `GX01xxxx`, `GX02xxxx` chapters) is
+  joined on the fly, in the right order, without writing a joined copy first.
+- **Safe to re-run.** Existing clips are skipped (`--force` redoes them).
+  Clips are written as `.part` files and renamed only when finished, so a
+  crash or cancel never leaves a broken clip that looks complete.
+- **Problems are listed, not fatal.** Typos (`1:75`, end before start), clips
+  past the end of the video, overlaps and suspiciously long clips are each
+  reported with the note's line number. Bad lines are skipped; the rest still
+  get cut.
+
+## What the note can contain
+
+| Written as | Understood as |
+|---|---|
+| `1:52-2:10`, `1:52 - 2:10`, `1:52–2:10`, `1:52 to 2:10`, `1.52-2.10` | a clip |
+| `1:02:03-1:02:30` | a clip past the hour (whole-match file) |
+| `3:05-3:33 Goal Conor` | a clip labelled "Goal Conor" |
+| `2nd Half`, `Second half video`, `Extra time 1`, `ET2`, `Penalties` | starts the next section / next video |
+| first text line before any clip | the match title |
+
+Timings are measured from the start of **that section's video**, not the
+match clock.
+
+## Command line
+
+Needs Python 3.11+ and ffmpeg/ffprobe on the PATH (the Windows app will bundle
+them).
+
+```bash
+pip install -e ".[dev]"
+
+# Check the note first: lists every clip and any problems
+hclip check dunloy.txt
+pbpaste | hclip check -          # straight from the clipboard on a Mac
+
+# Cut: one --half per section, in the note's order
+hclip cut dunloy.txt \
+  --half "Dunloy 1st half.mp4" \
+  --half "Dunloy 2nd half.mp4" \
+  --out "Dunloy clips"
+
+# A half recorded as several GoPro files
+hclip cut dunloy.txt --half GX010123.MP4 GX020123.MP4 --half GX010124.MP4
+
+# Frame-accurate (slow)
+hclip cut dunloy.txt --half h1.mp4 --half h2.mp4 --precise
+
+# Duration, codecs, keyframe spacing
+hclip info "Dunloy 1st half.mp4"
+```
+
+## Development
+
+```bash
+pytest            # unit + integration tests
+```
+
+Integration tests generate small test videos with ffmpeg's `testsrc`, so no
+real footage is needed. They are skipped if ffmpeg isn't installed.
+
+```
+hclip/
+  notes.py      parse the coach's note (sections, clips, problems + line numbers)
+  timecode.py   1:52 / 1:02:03 / 1.52 <-> seconds
+  ffmpeg.py     the only module that runs ffmpeg/ffprobe (pure command builders + runner)
+  cut.py        match sections to videos, check ranges, cut resumably with progress
+  naming.py     Windows-safe filenames
+  cli.py        command line
+```
