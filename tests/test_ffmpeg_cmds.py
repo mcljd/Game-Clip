@@ -94,3 +94,13 @@ def test_probe_uses_arg_list_not_shell(monkeypatch, tmp_path):
 def test_find_binary_env_override(monkeypatch):
     monkeypatch.setenv("HCLIP_FFMPEG", "/opt/ff/ffmpeg")
     assert ffmpeg.find_binary("ffmpeg") == "/opt/ff/ffmpeg"
+
+
+def test_find_binary_prefers_bundled_copy(monkeypatch, tmp_path):
+    monkeypatch.delenv("HCLIP_FFPROBE", raising=False)
+    exe = tmp_path / "ffmpeg" / ffmpeg._exe("ffprobe")
+    exe.parent.mkdir()
+    exe.write_bytes(b"")
+    monkeypatch.setattr("sys._MEIPASS", str(tmp_path), raising=False)
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/" + name)
+    assert ffmpeg.find_binary("ffprobe") == str(exe)

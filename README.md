@@ -24,9 +24,25 @@ and gets one file per clip, numbered in match order:
 12_h2_03m04-03m37.mp4
 ```
 
-> **Status:** the cutting engine and a command line are done and tested. The
-> Windows app for coaches (add videos, paste timings, press *Make clips*) is
-> the next step, built on the same engine.
+## For coaches: the GAA Clips app (Windows)
+
+1. **Install:** run `GAA-Clips-Setup.exe`. No admin password needed.
+   Windows may show *"Windows protected your PC"* because the app isn't
+   code-signed yet: click **More info → Run anyway**.
+2. **Paste the timings** from your phone into box 1. Each clip appears
+   straight away; typos are shown in red with the line number.
+3. **Choose the videos:** one per half (box 2 shows a slot for every half
+   in your note). If a half was recorded as several files, select them all
+   at once and they're joined in order. Videos aren't copied or uploaded, so
+   big files are fine, straight off an SD card or USB drive.
+4. **Make clips.** They're saved in a "*Match name* clips" folder next to the
+   videos. Press **Open folder** when it's done.
+
+Running it again skips clips that already exist, so if you stop part-way (or
+add more timings later), just press *Make clips* again.
+
+If the window won't open on an older PC, install Microsoft's free
+[Edge WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703).
 
 ## How it handles big match videos
 
@@ -94,8 +110,20 @@ hclip info "Dunloy 1st half.mp4"
 ## Development
 
 ```bash
-pytest            # unit + integration tests
+pytest                       # unit + integration tests
+pip install -e ".[app]"      # then: gaa-clips   (opens the window; Mac/Windows)
 ```
+
+### Building the Windows app
+
+GitHub Actions (`.github/workflows/build.yml`) does this on every push: it
+downloads a GPL ffmpeg build, runs the whole test suite on Windows, packages
+the app with PyInstaller (ffmpeg bundled inside), runs the packaged exe's
+`--selftest` (which fails if it isn't using its *own* ffmpeg), and builds
+`GAA-Clips-Setup.exe` with Inno Setup. Download it from the run's
+**Artifacts**; tagging `v0.1.0` attaches it to a GitHub release.
+
+The bundled ffmpeg is GPL-licensed; its licence ships in the app folder.
 
 Integration tests generate small test videos with ffmpeg's `testsrc`, so no
 real footage is needed. They are skipped if ffmpeg isn't installed.
@@ -108,4 +136,8 @@ hclip/
   cut.py        match sections to videos, check ranges, cut resumably with progress
   naming.py     Windows-safe filenames
   cli.py        command line
+  app/api.py    what the window can ask Python to do (tested without a window)
+  app/ui.html   the coach's window
+  app/main.py   opens it with pywebview; --selftest for packaged builds
+packaging/      PyInstaller spec + Inno Setup installer script
 ```

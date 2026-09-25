@@ -130,11 +130,11 @@ def parse(text: str) -> Note:
                 start = timecode.parse(start_s)
                 end = timecode.parse(end_s)
             except timecode.TimecodeError as e:
-                problems.append(Problem(lineno, f"couldn't read time: {e}", True))
+                problems.append(Problem(lineno, f"{e}. This line is skipped.", True))
                 continue
             if end <= start:
                 problems.append(
-                    Problem(lineno, f"end {end_s} is not after start {start_s}", True)
+                    Problem(lineno, f"ends ({end_s}) before it starts ({start_s}). This line is skipped.", True)
                 )
                 continue
             if current is None:
@@ -144,7 +144,7 @@ def parse(text: str) -> Note:
                 problems.append(
                     Problem(
                         lineno,
-                        f"clip is {timecode.fmt(clip.duration)} long - typo?",
+                        f"this clip is {timecode.fmt(clip.duration)} long - is that a typo?",
                         False,
                     )
                 )
@@ -158,7 +158,8 @@ def parse(text: str) -> Note:
 
         if _TIMEISH_RE.match(line):
             problems.append(
-                Problem(lineno, f"couldn't read {line!r} - expected like 1:52-2:10", True)
+                Problem(lineno, f"couldn't read “{line}”. Write it like 1:52-2:10. "
+                        "This line is skipped.", True)
             )
             continue
 

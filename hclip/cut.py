@@ -90,7 +90,7 @@ def plan(note: Note, halves: Sequence[HalfVideo], out_dir: Path) -> Plan:
                 problems.append(Problem(
                     c.line,
                     f"starts at {timecode.fmt(c.start)} but the {section.name} "
-                    f"video is only {timecode.fmt(half.duration)} long - skipped",
+                    f"video is only {timecode.fmt(half.duration)} long, so it's skipped",
                     True,
                 ))
                 continue
@@ -100,7 +100,7 @@ def plan(note: Note, halves: Sequence[HalfVideo], out_dir: Path) -> Plan:
                     problems.append(Problem(
                         c.line,
                         f"ends at {timecode.fmt(c.end)} but the {section.name} "
-                        f"video is only {timecode.fmt(half.duration)} long - skipped",
+                        f"video is only {timecode.fmt(half.duration)} long, so it's skipped",
                         True,
                     ))
                     continue
@@ -195,9 +195,12 @@ def run(
             on_progress(Progress(job, i, len(todo), frac, overall, elapsed, remaining))
 
         try:
-            ffmpeg.run(cmd, progress)
+            ffmpeg.run(cmd, progress, should_stop)
             os.replace(part, job.out)
             emit(Result(job, "made"))
+        except ffmpeg.Cancelled:
+            part.unlink(missing_ok=True)
+            break
         except ffmpeg.FFmpegError as e:
             part.unlink(missing_ok=True)
             emit(Result(job, "failed", str(e)))

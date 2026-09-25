@@ -11,13 +11,20 @@ requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
+app = ["pywebview>=5.4"]
 dev = ["pytest>=8"]
 
 [project.scripts]
 hclip = "hclip.cli:main"
 
+[project.gui-scripts]
+gaa-clips = "hclip.app.main:main"
+
 [tool.setuptools]
-packages = ["hclip"]
+packages = ["hclip", "hclip.app"]
+
+[tool.setuptools.package-data]
+"hclip.app" = ["ui.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

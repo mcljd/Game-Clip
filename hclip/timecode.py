@@ -15,7 +15,7 @@ def parse(text: str) -> float:
     """Return seconds for M:SS, MM:SS, H:MM:SS (':' or '.' as separator)."""
     m = _TIME_RE.match(text.strip())
     if not m:
-        raise TimecodeError(f"not a time: {text!r}")
+        raise TimecodeError(f"“{text}” isn't a time")
     a, b, c = m.groups()
     if c is None:
         minutes, seconds = int(a), int(b)
@@ -23,9 +23,9 @@ def parse(text: str) -> float:
     else:
         hours, minutes, seconds = int(a), int(b), int(c)
         if minutes >= 60:
-            raise TimecodeError(f"minutes must be under 60 in {text!r}")
+            raise TimecodeError(f"“{text}” isn't a time - minutes only go up to 59")
     if seconds >= 60:
-        raise TimecodeError(f"seconds must be under 60 in {text!r}")
+        raise TimecodeError(f"“{text}” isn't a time - seconds only go up to 59")
     return float(hours * 3600 + minutes * 60 + seconds)
 
 

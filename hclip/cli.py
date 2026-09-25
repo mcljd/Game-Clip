@@ -40,9 +40,10 @@ def cmd_info(args: argparse.Namespace) -> int:
 
 def cmd_check(args: argparse.Namespace) -> int:
     note = notes.parse(_read_note(args.note))
-    print(f"{note.title or '(no title)'}: {note.clip_count} clips")
+    n = note.clip_count
+    print(f"{note.title or '(no title)'}: {n} clip{'' if n == 1 else 's'}")
     for s in note.sections:
-        print(f"  {s.name} [{s.tag}] - {len(s.clips)} clips")
+        print(f"  {s.name} [{s.tag}] - {len(s.clips)} clip{'' if len(s.clips) == 1 else 's'}")
         for c in s.clips:
             label = f"  {c.label}" if c.label else ""
             print(f"    {timecode.fmt(c.start)}-{timecode.fmt(c.end)}"

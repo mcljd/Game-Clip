@@ -258,11 +258,21 @@ def build_cut_cmd(
 ProgressFn = Callable[[float], None]  # seconds of output written so far
 
 
-def run(cmd: Sequence[str], on_progress: ProgressFn | None = None) -> None:
+class Cancelled(Exception):
+    pass
+
+
+def run(
+    cmd: Sequence[str],
+    on_progress: ProgressFn | None = None,
+    should_stop: Callable[[], bool] | None = None,
+) -> None:
     """Run ffmpeg, streaming ``-progress`` output to ``on_progress``.
 
     stderr goes to a temp file (not a pipe) so a chatty ffmpeg can never
     deadlock us, and so it can be shown in full if the command fails.
+    ``should_stop`` is checked on every progress update (~2x a second); when
+    it returns True ffmpeg is killed and ``Cancelled`` raised.
     """
     with tempfile.TemporaryFile(mode="w+b") as err:
         proc = subprocess.Popen(
@@ -271,6 +281,10 @@ def run(cmd: Sequence[str], on_progress: ProgressFn | None = None) -> None:
         )
         assert proc.stdout is not None
         for raw in proc.stdout:
+            if should_stop and should_stop():
+                proc.kill()
+                proc.wait()
+                raise Cancelled()
             line = raw.decode("utf-8", "replace").strip()
             if on_progress and line.startswith("out_time_us="):
                 try:

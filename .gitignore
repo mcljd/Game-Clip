@@ -5,3 +5,7 @@ __pycache__/
 build/
 dist/
 *.part
+vendor/
+ffmpeg_x/
+ffmpeg.zip
+selftest.txt
