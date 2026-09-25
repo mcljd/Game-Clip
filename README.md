@@ -114,6 +114,9 @@ pytest                       # unit + integration tests
 pip install -e ".[app]"      # then: gaa-clips   (opens the window; Mac/Windows)
 ```
 
+Integration tests generate small test videos with ffmpeg's `testsrc`, so no
+real footage is needed. They are skipped if ffmpeg isn't installed.
+
 ### Building the Windows app
 
 GitHub Actions (`.github/workflows/build.yml`) does this on every push: it
@@ -124,9 +127,6 @@ the app with PyInstaller (ffmpeg bundled inside), runs the packaged exe's
 **Artifacts**; tagging `v0.1.0` attaches it to a GitHub release.
 
 The bundled ffmpeg is GPL-licensed; its licence ships in the app folder.
-
-Integration tests generate small test videos with ffmpeg's `testsrc`, so no
-real footage is needed. They are skipped if ffmpeg isn't installed.
 
 ```
 hclip/
