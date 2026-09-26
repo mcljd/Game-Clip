@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- GAA Clips app icon: a sliotar with a play button, maroon and white. -->
+  <rect width="256" height="256" rx="56" fill="#6e1423"/>
+  <circle cx="128" cy="128" r="86" fill="#ffffff"/>
+  <path d="M58 90c24 18 24 58 0 76M198 90c-24 18-24 58 0 76" fill="none" stroke="#6e1423" stroke-width="9" stroke-linecap="round"/>
+  <path d="M110 98 L158 128 L110 158 Z" fill="#6e1423" stroke="#6e1423" stroke-width="8" stroke-linejoin="round"/>
+</svg>

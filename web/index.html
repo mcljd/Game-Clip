@@ -5,12 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>GAA Clips</title>
 <meta name="description" content="Cut match clips from a coach's list of timings, right on your phone or laptop. Videos never leave your device.">
+<meta name="author" content="Joseph McLaughlin">
 <meta name="theme-color" content="#6e1423">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GAA Clips">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
   :root {
@@ -126,6 +128,7 @@
   button.primary.alt { background: var(--white); color: var(--maroon); }
   button.primary.alt:active:not(:disabled) { background: var(--maroon-soft); }
   select { font: inherit; padding: 2px 4px; border-radius: 6px; border: 1px solid var(--line); background: var(--white); color: var(--ink); }
+  .credit { grid-column: 1 / -1; text-align: center; color: var(--muted); font-size: 13px; }
   [hidden] { display: none !important; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
@@ -134,9 +137,10 @@
 <header class="bar">
   <div class="bar-inner">
     <div class="brand">
-      <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
-        <circle cx="16" cy="16" r="14" fill="#fff"/>
-        <path d="M6 10c4 3 4 9 0 12M26 10c-4 3-4 9 0 12" fill="none" stroke="#6e1423" stroke-width="2.4" stroke-linecap="round"/>
+      <svg width="30" height="30" viewBox="0 0 256 256" aria-hidden="true">
+        <circle cx="128" cy="128" r="118" fill="#fff"/>
+        <path d="M44 86c30 22 30 62 0 84M212 86c-30 22-30 62 0 84" fill="none" stroke="#6e1423" stroke-width="14" stroke-linecap="round"/>
+        <path d="M106 90 L166 128 L106 166 Z" fill="#6e1423" stroke="#6e1423" stroke-width="10" stroke-linejoin="round"/>
       </svg>
       GAA Clips
     </div>
@@ -202,6 +206,7 @@
       <video id="player" controls playsinline hidden></video>
     </section>
   </div>
+  <footer class="credit">GAA Clips · by Joseph McLaughlin</footer>
 </main>
 
 <div class="action">
