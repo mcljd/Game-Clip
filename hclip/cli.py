@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from hclip import cut, ffmpeg, notes, timecode
+from hclip import cut, ffmpeg, notes, reel, timecode
 from hclip.notes import Problem
 
 
@@ -93,6 +93,44 @@ def cmd_cut(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def cmd_reel(args: argparse.Namespace) -> int:
+    note = notes.parse(_read_note(args.note))
+    halves = [cut.HalfVideo.open(files) for files in args.half]
+    out = Path(args.out)
+    try:
+        p = cut.plan(note, halves, out)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    problems = note.problems + p.problems
+    if problems:
+        print("Problems in the note:", file=sys.stderr)
+        _print_problems(problems)
+    title = args.title or note.title or "Match"
+    reels = reel.plan_reels(note, p.jobs, out, title, halves=not args.whole, whole=args.whole)
+    how = "re-encoding" if not reel.can_copy(p.jobs) else "stream copy"
+    print(f"Making {len(reels)} video(s) from {len(p.jobs)} clips into {out} ({how})")
+
+    def on_progress(pr: reel.ReelProgress) -> None:
+        eta = f"{pr.remaining:.0f}s left" if pr.remaining is not None else "..."
+        print(f"\r  {pr.stage:<28} {pr.overall:4.0%}  {eta}   ", end="", flush=True)
+
+    try:
+        results = reel.run_reels(reels, precise=args.precise, force=not args.skip_existing,
+                                 keep_clips_dir=out / "Clips" if args.keep_clips else None,
+                                 on_progress=on_progress)
+    finally:
+        for h in halves:
+            h.close()
+    print()
+    for r in results:
+        extra = f" (left out lines {', '.join(map(str, r.missing))})" if r.missing else ""
+        print(f"  {r.status:<7} {r.reel.out.name}{extra}")
+        if r.status == "failed" and r.error:
+            print(r.error, file=sys.stderr)
+    return 1 if any(r.status == "failed" for r in results) else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="hclip", description=__doc__)
     sub = ap.add_subparsers(dest="command", required=True)
@@ -116,6 +154,19 @@ def build_parser() -> argparse.ArgumentParser:
                    help="frame-accurate cuts (re-encodes; much slower)")
     p.add_argument("--force", action="store_true", help="redo clips that exist")
     p.set_defaults(func=cmd_cut)
+
+    p = sub.add_parser("reel", help="make one highlights video per half (or --whole)")
+    p.add_argument("note", help="text file, or - for stdin")
+    p.add_argument("--half", action="append", nargs="+", required=True, metavar="VIDEO",
+                   help="video file(s) for one section, in note order; repeat per half")
+    p.add_argument("--out", default="highlights", help="output folder")
+    p.add_argument("--title", default="", help="match name used in the file names")
+    p.add_argument("--whole", action="store_true", help="one video for the whole match")
+    p.add_argument("--keep-clips", action="store_true", help="also keep each clip")
+    p.add_argument("--precise", action="store_true", help="frame-accurate (slower)")
+    p.add_argument("--skip-existing", action="store_true",
+                   help="don't remake videos that are already there")
+    p.set_defaults(func=cmd_reel)
     return ap
 
 

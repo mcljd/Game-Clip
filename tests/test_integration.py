@@ -99,3 +99,15 @@ def test_cli_end_to_end(videos, tmp_path, capsys):
     assert code == 0
     assert len(list((tmp_path / "clips").glob("*.mp4"))) == 3
     assert cli.main(["check", str(note)]) == 0
+
+
+def test_cli_reel(videos, tmp_path):
+    note = tmp_path / "note.txt"
+    note.write_text(NOTE, encoding="utf-8")
+    args = ["reel", str(note), "--half", str(videos["h1"]), "--half", str(videos["h2"]),
+            "--out", str(tmp_path / "o")]
+    assert cli.main(args) == 0
+    assert sorted(p.name for p in (tmp_path / "o").iterdir()) == [
+        "Test match - 1st Half.mp4", "Test match - 2nd half.mp4"]
+    assert cli.main(args + ["--whole"]) == 0
+    assert (tmp_path / "o" / "Test match - Whole match.mp4").exists()

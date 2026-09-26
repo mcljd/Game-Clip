@@ -75,6 +75,20 @@
     padding: 8px; border-radius: 6px; max-height: 200px; overflow: auto; }
   .banner { background: var(--bad-soft); color: var(--bad); padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; }
   [hidden] { display: none !important; }
+  .textlist { display: grid; gap: 6px; max-height: 420px; overflow: auto; padding-right: 4px; }
+  .trow { display: grid; grid-template-columns: 58px 104px 1fr; gap: 8px; align-items: center; font-size: 13px; }
+  .trow .half { color: var(--muted); font-size: 12px; }
+  .trow .time { font-variant-numeric: tabular-nums; }
+  .trow input { padding: 6px 8px; }
+  .preview { display: block; width: 100%; max-width: 360px; aspect-ratio: 16 / 9; border-radius: 6px; margin: 4px 0 10px; background: #000; }
+  .reels { list-style: none; padding: 0; margin: 4px 0 12px; display: grid; gap: 4px; font-size: 14px; }
+  .reels li { display: flex; justify-content: space-between; gap: 8px; }
+  .reels .meta { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  button.primary.alt { background: var(--card); color: var(--accent); }
+  button.primary.alt:hover:not(:disabled) { background: var(--accent-soft); }
+  select { font: inherit; padding: 2px 4px; border-radius: 6px; border: 1px solid var(--line); }
+  .made { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 4px; text-align: left; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -88,21 +102,30 @@
 </header>
 <main>
   <div class="banner" id="ffmpegBanner" hidden></div>
-
   <div class="grid">
-    <section class="card">
-      <h2><span class="n">1</span> Paste the clip timings</h2>
-      <textarea id="note" spellcheck="false" placeholder="Copy the timings from your phone and paste them here, e.g.
+    <div>
+      <section class="card">
+        <h2><span class="n">1</span> Paste the clip timings</h2>
+        <textarea id="note" spellcheck="false" placeholder="Copy the timings from your phone and paste them here, e.g.
 
 Dunloy clips
 1:52-2:10
-3:05-3:33 point from play
+3:05-3:33 Point from play - Conor
 
 2nd Half Video
 3:04-3:37"></textarea>
-      <div class="summary" id="summary"></div>
-      <ul class="problems" id="noteProblems"></ul>
-    </section>
+        <div class="summary" id="summary"></div>
+        <ul class="problems" id="noteProblems"></ul>
+      </section>
+
+      <section class="card" id="textCard" style="margin-top:16px" hidden>
+        <h2>Text before each clip</h2>
+        <p class="hint" style="margin:0 0 8px">Shown on a black screen before the clip. Leave blank for no screen.
+          You can also type it after the time in the timings, e.g. <code>3:05-3:33 Point - Conor</code>.</p>
+        <canvas id="preview" class="preview" width="640" height="360" aria-label="Preview of the text screen"></canvas>
+        <div class="textlist" id="textList"></div>
+      </section>
+    </div>
 
     <div>
       <section class="card">
@@ -113,21 +136,29 @@ Dunloy clips
       </section>
 
       <section class="card" style="margin-top:16px">
-        <h2><span class="n">3</span> Make the clips</h2>
+        <h2><span class="n">3</span> Make the highlights</h2>
         <div id="setup">
-          <div class="hint" style="margin-bottom:4px">Save clips to</div>
+          <div class="hint" style="margin-bottom:4px">Save to</div>
           <div class="row">
-            <input type="text" id="outDir" aria-label="Save clips to">
+            <input type="text" id="outDir" aria-label="Save to">
             <button id="chooseOut">Change…</button>
           </div>
           <div class="opts">
-            <label><input type="checkbox" id="precise">
-              <span>Exact start times <span class="hint">Slower. Normally clips may start a second or two early.</span></span></label>
-            <label id="redoWrap" hidden><input type="checkbox" id="redo">
-              <span>Make again the clips already in the folder <span class="hint" id="redoHint"></span></span></label>
+            <label id="cardsWrap"><input type="checkbox" id="cards" checked>
+              <span>Black text screen before clips with text, for
+                <select id="cardSecs" aria-label="Seconds"><option>2</option><option selected>3</option><option>4</option><option>5</option></select> seconds
+                <span class="hint" id="cardsHint"></span></span></label>
+            <label><input type="checkbox" id="keepClips">
+              <span>Also keep each clip separately <span class="hint">In a Clips folder next to the reels.</span></span></label>
+            <label id="preciseWrap"><input type="checkbox" id="precise">
+              <span>Exact start times <span class="hint">Slower. Normally a clip may start a second or two early.</span></span></label>
           </div>
+          <ul class="reels" id="reelList"></ul>
           <ul class="problems" id="planProblems"></ul>
-          <button class="primary" id="go" disabled>Make clips</button>
+          <div class="buttons">
+            <button class="primary" id="goHalves" disabled>Make half reels</button>
+            <button class="primary alt" id="goWhole" disabled>Make one video</button>
+          </div>
           <div class="status" id="status"></div>
         </div>
 
@@ -140,6 +171,7 @@ Dunloy clips
         <div id="done" class="done-box" hidden>
           <div id="doneTitle" class="big"></div>
           <div id="doneDetail" class="hint"></div>
+          <ul class="made" id="madeList"></ul>
           <ul class="problems" id="failList" style="text-align:left"></ul>
           <div class="row" style="margin-top:14px">
             <button class="primary" id="openFolder" style="width:auto">Open folder</button>
@@ -156,11 +188,61 @@ const $ = (id) => document.getElementById(id);
 let api = null;
 let note = { sections: [], clip_count: 0, problems: [], title: "" };
 let slots = {};          // index -> info from Python
+let chk = null;          // last check() result
 let titleEdited = false, outEdited = false;
-let pollTimer = null;
+let pollTimer = null, textSig = "", previewText = "";
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+
+// --- Same as web/notes.js setLabel: write a clip's text into its line. ---
+const TIME = String.raw`\d{1,3}[:.]\d{2}(?:[:.]\d{2})?`;
+const LEAD_RE = new RegExp(String.raw`^(\s*${TIME}\s*(?:-+|–|—|to)\s*${TIME})`, "i");
+function setLabel(text, lineNo, label) {
+  const nl = text.includes("\r\n") ? "\r\n" : "\n";
+  const lines = text.split(/\r\n|\r|\n/);
+  const m = LEAD_RE.exec(lines[lineNo - 1] || "");
+  if (!m) return text;
+  const clean = String(label).replace(/[\r\n]+/g, " ").trim();
+  lines[lineNo - 1] = clean ? `${m[1]} ${clean}` : m[1];
+  return lines.join(nl);
+}
+
+// --- Same as web/cards.js drawCard: the black text screen. ---
+function drawCard(canvas, text) {
+  const FONT = '"Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif';
+  const ctx = canvas.getContext("2d"), w = canvas.width, h = canvas.height;
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, w, h);
+  const maxWidth = w * 0.84;
+  const wrap = (t) => { const out = []; let line = "";
+    for (const word of t.split(/\s+/).filter(Boolean)) {
+      const test = line ? `${line} ${word}` : word;
+      if (ctx.measureText(test).width <= maxWidth || !line) line = test; else { out.push(line); line = word; }
+    } if (line) out.push(line); return out; };
+  let size = Math.round(h * 0.09), lines;
+  for (;;) {
+    ctx.font = `700 ${size}px ${FONT}`;
+    lines = wrap(text.trim());
+    const widest = Math.max(0, ...lines.map((l) => ctx.measureText(l).width));
+    if ((lines.length <= 4 && widest <= maxWidth) || size <= h * 0.035) break;
+    size = Math.round(size * 0.9);
+  }
+  const lineHeight = size * 1.2, bar = Math.max(3, Math.round(h * 0.008)), gap = size * 0.55;
+  let y = (h - (lines.length * lineHeight + gap + bar)) / 2 + lineHeight / 2;
+  ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  for (const l of lines) { ctx.fillText(l, w / 2, y); y += lineHeight; }
+  const barWidth = Math.round(w * 0.08);
+  ctx.fillStyle = "#8a1a2c";
+  ctx.fillRect(Math.round((w - barWidth) / 2), Math.round(y - lineHeight / 2 + gap), barWidth, bar);
+}
+
+function cardPng(text, width, height) {
+  const c = document.createElement("canvas");
+  c.width = width; c.height = height;
+  drawCard(c, text);
+  return c.toDataURL("image/png");
+}
 
 function sectionsForSlots() {
   if (note.sections.length) return note.sections;
@@ -177,11 +259,39 @@ function renderProblems(el, problems) {
 function renderNote() {
   const s = note.sections;
   $("summary").innerHTML = note.clip_count
-    ? `<strong>${note.clip_count} clip${note.clip_count === 1 ? "" : "s"}</strong> · ` +
+    ? `<strong>${plural(note.clip_count, "clip")}</strong> · ` +
       s.map((x) => `${esc(x.name)}: ${x.clips.length}`).join(" · ")
     : "";
   renderProblems($("noteProblems"), note.problems);
   if (!titleEdited && note.title) $("title").value = note.title.replace(/\s+clips?$/i, "");
+}
+
+function renderPreview(text) {
+  previewText = text;
+  drawCard($("preview"), text || "Point from play - Conor");
+}
+
+function renderTextList() {
+  const rows = note.sections.flatMap((s) => s.clips.map((c) => ({ ...c, half: s.name })));
+  $("textCard").hidden = !rows.length;
+  const sig = rows.map((r) => `${r.line}|${r.start}|${r.end}`).join(",");
+  if (sig !== textSig) {
+    textSig = sig;
+    $("textList").innerHTML = rows.map((r) => `<div class="trow">
+        <span class="half">${esc(r.half.replace(/\s*video$/i, ""))}</span>
+        <span class="time">${r.start}–${r.end}</span>
+        <input type="text" data-line="${r.line}" value="${esc(r.label)}" placeholder="No text screen" aria-label="Text before ${r.start}">
+      </div>`).join("");
+  } else {
+    for (const r of rows) {
+      const el = $("textList").querySelector(`[data-line="${r.line}"]`);
+      if (el && el !== document.activeElement) el.value = r.label;
+    }
+  }
+  if (!previewText) {
+    const first = rows.find((r) => r.label);
+    renderPreview(first ? first.label : "");
+  }
 }
 
 function renderSlots() {
@@ -205,16 +315,23 @@ async function refresh() {
   const text = $("note").value;
   note = await api.read_note(text);
   renderNote();
+  renderTextList();
   renderSlots();
   if (!outEdited) $("outDir").value = await api.default_folder($("title").value);
-  const chk = await api.check(text, $("outDir").value);
-  renderProblems($("planProblems"), chk.problems.filter((p) => p.fatal || !note.problems.some((q) => q.line === p.line && q.message === p.message)));
-  $("go").disabled = !chk.ready;
-  const toMake = chk.clips - ($("redo").checked ? 0 : chk.existing);
-  $("go").textContent = chk.ready ? `Make ${chk.clips} clip${chk.clips === 1 ? "" : "s"}` : "Make clips";
-  $("redoWrap").hidden = !chk.existing;
-  $("redoHint").textContent = chk.existing ? `${chk.existing} of ${chk.clips} already made; they'll be skipped unless ticked.` : "";
-  $("status").textContent = chk.ready ? (toMake === 0 ? "All clips already made - tick above to make them again." : "") : chk.message;
+  chk = await api.check(text, $("outDir").value, $("title").value, $("cards").checked);
+  const noteKeys = new Set(note.problems.map((p) => `${p.line}|${p.message}`));
+  renderProblems($("planProblems"), chk.problems.filter((p) => !noteKeys.has(`${p.line}|${p.message}`)));
+  $("goHalves").disabled = $("goWhole").disabled = !chk.ready;
+  const labelled = chk.labelled || 0;
+  $("cardsHint").textContent = !chk.clips ? "" : labelled
+    ? `${labelled} of ${chk.clips} clips have text. Text screens mean the video is re-made, which takes a few minutes.`
+    : "No clips have text yet: add it in the list on the left.";
+  $("preciseWrap").hidden = chk.encode;        // re-made videos are exact anyway
+  const reel = (r) => `<li><span>${esc(r.name)}</span><span class="meta">${plural(r.clips, "clip")} · ${r.length}${r.exists ? " · will be replaced" : ""}</span></li>`;
+  $("reelList").innerHTML = chk.ready
+    ? chk.reels.map(reel).join("") + `<li style="border-top:1px solid var(--line);padding-top:4px">${reel(chk.whole).slice(4, -5)}</li>`
+    : "";
+  $("status").textContent = chk.ready ? "" : chk.message;
 }
 const refreshSoon = debounce(refresh, 250);
 
@@ -233,28 +350,40 @@ function fmtEta(s) {
 async function poll() {
   const st = await api.status();
   $("barFill").style.width = `${Math.round(st.overall * 100)}%`;
-  $("progText").textContent = st.total ? `Clip ${st.number} of ${st.total}${st.current ? " - " + st.current : ""}` : "Starting…";
+  $("progText").textContent = st.stage || "Starting…";
   $("progEta").textContent = fmtEta(st.remaining);
   if (st.finished) { clearInterval(pollTimer); showDone(st); }
 }
 
 function showDone(st) {
   $("running").hidden = true; $("done").hidden = false;
-  const made = st.made, failed = st.failed.length;
+  const made = st.reels.filter((r) => r.status === "made");
+  const skipped = st.reels.filter((r) => r.status === "skipped");
   $("doneTitle").textContent = st.error ? "Something went wrong"
-    : st.cancelled ? `Stopped - ${made} clip${made === 1 ? "" : "s"} made`
-    : failed ? `${made} made, ${failed} failed` : `${made + st.skipped} clips ready`;
-  const bits = [];
-  if (st.skipped) bits.push(`${st.skipped} were already there`);
-  if (st.cancelled) bits.push("press Make clips again to finish the rest");
-  $("doneDetail").textContent = st.error || bits.join(" · ");
-  $("failList").innerHTML = st.failed.map((f) => `<li class="fatal">Line ${f.line} (${esc(f.name)}) failed
-    <details><summary>Details</summary><pre>${esc(f.error)}</pre></details></li>`).join("");
+    : st.cancelled ? "Stopped"
+    : st.failed.length ? `${made.length} made, ${st.failed.length} failed`
+    : `${plural(made.length + skipped.length, "video")} ready`;
+  $("doneDetail").textContent = st.error || (st.cancelled
+    ? "Press Make again to finish. Work already done is kept." : "");
+  $("madeList").innerHTML = [...made, ...skipped].map((r) =>
+    `<li><strong>${esc(r.file)}</strong> <span class="hint">${r.length}${r.status === "skipped" ? " · already there" : ""}</span></li>`).join("");
+  $("failList").innerHTML = st.reels.filter((r) => r.missing.length || r.status === "failed").map((r) =>
+    `<li class="${r.status === "failed" ? "fatal" : "warn"}">${esc(r.name)}: ${r.status === "failed" ? "not made" : `left out the clip${r.missing.length > 1 ? "s" : ""} on line ${r.missing.join(", ")}`}
+      ${r.error ? `<details><summary>Details</summary><pre>${esc(r.error)}</pre></details>` : ""}</li>`).join("");
   $("openFolder").dataset.path = st.out_dir;
 }
 
-async function start() {
-  const res = await api.start($("note").value, $("outDir").value, $("precise").checked, $("redo").checked);
+async function start(what) {
+  let cards = null;
+  if ($("cards").checked && chk && chk.look) {
+    cards = {};
+    for (const s of note.sections) for (const c of s.clips) {
+      if (c.label.trim()) cards[String(c.line)] = cardPng(c.label, chk.look.width, chk.look.height);
+    }
+    if (!Object.keys(cards).length) cards = null;
+  }
+  const res = await api.start($("note").value, $("outDir").value, $("title").value, what, cards,
+    Number($("cardSecs").value), $("keepClips").checked, $("precise").checked);
   if (res.error) { $("status").textContent = res.error; return; }
   $("setup").hidden = true; $("running").hidden = false; $("done").hidden = true;
   $("barFill").style.width = "0";
@@ -268,7 +397,18 @@ async function init() {
   $("note").addEventListener("input", refreshSoon);
   $("title").addEventListener("input", () => { titleEdited = true; refreshSoon(); });
   $("outDir").addEventListener("input", () => { outEdited = true; refreshSoon(); });
-  $("redo").addEventListener("change", refresh);
+  for (const id of ["cards", "keepClips"]) $(id).addEventListener("change", refresh);
+  $("textList").addEventListener("input", (e) => {
+    const el = e.target.closest("[data-line]");
+    if (!el) return;
+    $("note").value = setLabel($("note").value, Number(el.dataset.line), el.value);
+    renderPreview(el.value);
+    refreshSoon();
+  });
+  $("textList").addEventListener("focusin", (e) => {
+    const el = e.target.closest("[data-line]");
+    if (el) renderPreview(el.value);
+  });
   $("slots").addEventListener("click", async (e) => {
     const p = e.target.closest("[data-pick]"), c = e.target.closest("[data-clear]");
     if (p) await pick(Number(p.dataset.pick));
@@ -278,10 +418,12 @@ async function init() {
     const d = await api.choose_folder();
     if (d) { $("outDir").value = d; outEdited = true; await refresh(); }
   });
-  $("go").addEventListener("click", start);
+  $("goHalves").addEventListener("click", () => start("halves"));
+  $("goWhole").addEventListener("click", () => start("whole"));
   $("cancel").addEventListener("click", () => { api.cancel(); $("progEta").textContent = "Stopping…"; });
   $("openFolder").addEventListener("click", (e) => api.open_folder(e.target.dataset.path));
   $("again").addEventListener("click", () => { $("done").hidden = true; $("setup").hidden = false; refresh(); });
+  renderPreview("");
   await refresh();
 }
 

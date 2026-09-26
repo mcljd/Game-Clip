@@ -8,15 +8,18 @@ directly; the window's native dialogs are passed in as functions.
 
 from __future__ import annotations
 
+import base64
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Sequence
 
-from hclip import cut, ffmpeg, naming, notes, timecode
+from hclip import cut, ffmpeg, naming, notes, reel, timecode
 
 VIDEO_EXTS = ("mp4", "mov", "m4v", "mts", "m2ts", "avi", "mkv", "lrv")
 
@@ -54,6 +57,7 @@ class _RunState:
     cancelled: bool = False
     error: str = ""
     out_dir: str = ""
+    reels: list[dict] = field(default_factory=list)
 
 
 class Api:
@@ -133,14 +137,14 @@ class Api:
     # -------------------------------------------------------------- output
 
     def default_folder(self, title: str) -> str:
-        """'<title> clips' next to the first video, e.g. D:\\Dunloy\\Dunloy clips."""
+        """'<title> highlights' next to the first video."""
         if 0 in self._slots:
             base = self._slots[0].half.files[0].parent
         elif self._slots:
             base = next(iter(self._slots.values())).half.files[0].parent
         else:
             base = Path.home() / "Videos"
-        name = (title.strip() or "Match") + " clips"
+        name = (title.strip() or "Match") + " highlights"
         return str(base / _safe_folder(name))
 
     def choose_folder(self) -> str | None:
@@ -148,78 +152,111 @@ class Api:
 
     # --------------------------------------------------------------- check
 
-    def check(self, text: str, out_dir: str) -> dict:
-        """Everything the Make clips button needs to know."""
+    def _plan(self, text: str, out_dir: str):
         note = notes.parse(text)
-        n = len(note.sections)
+        halves = [self._slots[i].half for i in range(len(note.sections))]
+        return note, cut.plan(note, halves, Path(out_dir or "."))
+
+    def check(self, text: str, out_dir: str, title: str = "", cards: bool = False) -> dict:
+        """Everything the Make buttons need to know."""
+        note = notes.parse(text)
         missing = [s.name for i, s in enumerate(note.sections) if i not in self._slots]
         result = {"ready": False, "message": "", "problems": [], "clips": 0,
-                  "existing": 0}
+                  "reels": [], "whole": None, "labelled": 0, "encode": False,
+                  "look": None, "existing": []}
         if note.clip_count == 0:
             result["message"] = "Paste the clip timings to begin."
             return result
         if missing:
             result["message"] = "Choose the video for: " + ", ".join(missing)
             return result
-        halves = [self._slots[i].half for i in range(n)]
-        p = cut.plan(note, halves, Path(out_dir or "."))
+        note, p = self._plan(text, out_dir)
         result["problems"] = [_problem(x) for x in p.problems]
         result["clips"] = len(p.jobs)
-        result["existing"] = sum(j.out.exists() for j in p.jobs)
         if not p.jobs:
             result["message"] = "None of the clips fit inside the videos."
             return result
+        out = Path(out_dir or ".")
+        halves_r = reel.plan_reels(note, p.jobs, out, title, halves=True)
+        [whole_r] = reel.plan_reels(note, p.jobs, out, title, halves=False, whole=True)
+        info = lambda r: {"name": r.name, "file": r.out.name, "clips": len(r.jobs),
+                          "length": timecode.fmt(r.duration), "exists": r.out.exists()}
+        result["reels"] = [info(r) for r in halves_r]
+        result["whole"] = info(whole_r)
+        result["labelled"] = sum(1 for j in p.jobs if j.clip.label.strip())
+        use_cards = cards and result["labelled"] > 0
+        result["encode"] = use_cards or not reel.can_copy(p.jobs)
+        look = reel.look_for(p.jobs)
+        result["look"] = {"width": look.width, "height": look.height}
         if not out_dir:
-            result["message"] = "Choose where to save the clips."
+            result["message"] = "Choose where to save the videos."
             return result
         result["ready"] = True
         return result
 
     # ----------------------------------------------------------------- run
 
-    def start(self, text: str, out_dir: str, precise: bool = False,
-              redo: bool = False) -> dict:
+    def start(self, text: str, out_dir: str, title: str = "", what: str = "halves",
+              cards: dict | None = None, card_seconds: float = reel.DEFAULT_CARD_SECONDS,
+              keep_clips: bool = False, precise: bool = False) -> dict:
+        """``what`` is "halves" (one reel per half) or "whole" (one video).
+        ``cards`` maps a note line (as a string, from JS) to a PNG as base64."""
         with self._lock:
             if self._state.running:
-                return {"error": "Already making clips."}
-        chk = self.check(text, out_dir)
+                return {"error": "Already making videos."}
+        chk = self.check(text, out_dir, title, bool(cards))
         if not chk["ready"]:
             return {"error": chk["message"]}
-        note = notes.parse(text)
-        halves = [self._slots[i].half for i in range(len(note.sections))]
-        p = cut.plan(note, halves, Path(out_dir))
+        note, p = self._plan(text, out_dir)
+        out = Path(out_dir)
+        reels = reel.plan_reels(note, p.jobs, out, title,
+                                halves=what == "halves", whole=what == "whole")
+        card_images = {}
+        if cards:
+            card_dir = Path(tempfile.mkdtemp(prefix="gaa-cards-"))
+            for line, b64 in cards.items():
+                path = card_dir / f"card_{int(line)}.png"
+                path.write_bytes(base64.b64decode(b64.split(",")[-1]))
+                card_images[int(line)] = path
         self._stop.clear()
         with self._lock:
-            self._state = _RunState(running=True, total=len(p.jobs), out_dir=out_dir)
+            self._state = _RunState(running=True, total=len(reels), out_dir=out_dir)
         self._thread = threading.Thread(
-            target=self._work, args=(p.jobs, precise, redo), daemon=True)
+            target=self._work,
+            args=(reels, card_images, float(card_seconds),
+                  out / "Clips" if keep_clips else None, precise),
+            daemon=True)
         self._thread.start()
         return {"ok": True}
 
-    def _work(self, jobs: list[cut.Job], precise: bool, redo: bool) -> None:
-        def on_progress(pr: cut.Progress) -> None:
+    def _work(self, reels, card_images, card_seconds, keep_dir, precise) -> None:
+        def on_progress(pr: reel.ReelProgress) -> None:
             with self._lock:
                 st = self._state
-                st.index, st.current = pr.index, pr.job.out.name
-                st.fraction, st.overall, st.remaining = pr.fraction, pr.overall, pr.remaining
-
-        def on_result(r: cut.Result) -> None:
-            with self._lock:
-                if r.status == "made":
-                    self._state.made += 1
-                elif r.status == "skipped":
-                    self._state.skipped += 1
-                else:
-                    self._state.failed.append({"name": r.job.out.name,
-                                               "line": r.job.clip.line,
-                                               "error": r.error})
+                st.current, st.overall, st.remaining = pr.stage, pr.overall, pr.remaining
         try:
-            cut.run(jobs, precise=precise, force=redo, on_progress=on_progress,
-                    on_result=on_result, should_stop=self._stop.is_set)
+            results = reel.run_reels(
+                reels, card_images=card_images, card_seconds=card_seconds,
+                # Always rebuild: the coach may have changed the text or clips.
+                precise=precise, keep_clips_dir=keep_dir, force=True,
+                on_progress=on_progress, should_stop=self._stop.is_set)
+            with self._lock:
+                self._state.reels = [
+                    {"name": r.reel.name, "file": r.reel.out.name, "status": r.status,
+                     "error": r.error, "missing": list(r.missing),
+                     "length": timecode.fmt(r.reel.duration)}
+                    for r in results]
+                self._state.made = sum(r.status == "made" for r in results)
+                self._state.skipped = sum(r.status == "skipped" for r in results)
+                self._state.failed = [x for x in self._state.reels if x["status"] == "failed"]
         except Exception as e:  # show anything unexpected rather than hang
             with self._lock:
                 self._state.error = str(e) or type(e).__name__
         finally:
+            for path in card_images.values():
+                path.unlink(missing_ok=True)
+            if card_images:
+                shutil.rmtree(next(iter(card_images.values())).parent, ignore_errors=True)
             with self._lock:
                 self._state.running = False
                 self._state.finished = True
@@ -231,12 +268,10 @@ class Api:
             return {
                 "running": st.running, "finished": st.finished,
                 "cancelled": st.cancelled, "error": st.error,
-                "total": st.total, "number": min(st.index + 1, st.total) if st.total else 0,
-                "current": st.current, "fraction": st.fraction,
-                "overall": st.overall,
+                "total": st.total, "stage": st.current, "overall": st.overall,
                 "remaining": None if st.remaining is None else round(st.remaining),
                 "made": st.made, "skipped": st.skipped, "failed": list(st.failed),
-                "out_dir": st.out_dir,
+                "reels": list(st.reels), "out_dir": st.out_dir,
             }
 
     def cancel(self) -> None:

@@ -23,6 +23,7 @@ class HalfVideo:
     duration: float
     reencode_audio: bool
     hevc: bool = False
+    info: ffmpeg.MediaInfo | None = None   # first file's details
     _concat_list: Path | None = None
 
     @classmethod
@@ -36,6 +37,7 @@ class HalfVideo:
             duration=sum(i.duration for i in infos),
             reencode_audio=any(i.audio_needs_reencode for i in infos),
             hevc=infos[0].video_codec == "hevc",
+            info=infos[0],
         )
 
     @property

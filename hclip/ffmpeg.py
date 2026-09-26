@@ -86,6 +86,16 @@ class MediaInfo:
     fps: float | None
     audio_codec: str | None
     size_bytes: int
+    fps_str: str | None = None      # exact rate, e.g. "30000/1001"
+    pix_fmt: str | None = None
+    sample_rate: int | None = None
+    channels: int | None = None
+
+    def join_key(self) -> tuple:
+        """Clips from files with the same key can be joined without
+        re-encoding (same codec, picture size, frame rate and audio)."""
+        return (self.video_codec, self.width, self.height, self.fps_str, self.pix_fmt,
+                self.audio_codec, self.sample_rate, self.channels)
 
     @property
     def audio_needs_reencode(self) -> bool:
@@ -135,6 +145,10 @@ def parse_probe(path: str, data: dict) -> MediaInfo:
         fps=_fps(v.get("avg_frame_rate") or v.get("r_frame_rate")) if v else None,
         audio_codec=a.get("codec_name") if a else None,
         size_bytes=int(fmt.get("size") or 0),
+        fps_str=(v.get("avg_frame_rate") or v.get("r_frame_rate")) if v else None,
+        pix_fmt=v.get("pix_fmt") if v else None,
+        sample_rate=int(a["sample_rate"]) if a and a.get("sample_rate") else None,
+        channels=a.get("channels") if a else None,
     )
 
 
@@ -257,6 +271,89 @@ def build_cut_cmd(
         "-f", "mp4", str(out),
     ]
     return cmd
+
+
+# --------------------------------------------------------------------------
+# Reels: re-encoded pieces that join cleanly
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Look:
+    """The one encode every piece of a re-encoded reel shares, so the pieces
+    can then be joined by stream copy without glitches at the joins."""
+    width: int
+    height: int
+    fps: str = "25"          # exact rate string, e.g. "30000/1001"
+    preset: str = "veryfast"
+    crf: int = 20
+
+    @classmethod
+    def for_source(cls, info: "MediaInfo", max_height: int | None = None,
+                   preset: str = "veryfast") -> "Look":
+        w, h = info.width or 1280, info.height or 720
+        if max_height and h > max_height:
+            w, h = round(w * max_height / h), max_height
+        even = lambda n: max(2, int(n) // 2 * 2)
+        fps = info.fps_str if info.fps_str and info.fps_str != "0/0" else "25"
+        return cls(even(w), even(h), fps, preset)
+
+
+def _encode_args(look: Look) -> list[str]:
+    return [
+        "-c:v", "libx264", "-preset", look.preset, "-crf", str(look.crf),
+        "-pix_fmt", "yuv420p", "-profile:v", "high",
+        "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2",
+        "-video_track_timescale", "90000",
+    ]
+
+
+def _fit_filter(look: Look) -> str:
+    w, h = look.width, look.height
+    return (f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
+            f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={look.fps},format=yuv420p")
+
+
+_SILENCE = ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]
+
+
+def build_encode_clip_cmd(
+    ffmpeg: str, source: str | Path, start: float, duration: float, out: str | Path,
+    look: Look, *, is_concat: bool = False, has_audio: bool = True,
+) -> list[str]:
+    """One clip re-encoded to ``look`` (frame-accurate, since it's decoded)."""
+    cmd = [ffmpeg, "-hide_banner", "-nostdin", "-y",
+           "-ss", f"{start:.3f}", *input_args(source, is_concat)]
+    if not has_audio:
+        cmd += _SILENCE
+    cmd += ["-t", f"{duration:.3f}", "-map", "0:v:0",
+            "-map", "0:a:0" if has_audio else "1:a:0",
+            "-vf", _fit_filter(look), *_encode_args(look),
+            "-progress", "pipe:1", "-nostats", "-f", "mp4", str(out)]
+    return cmd
+
+
+def build_card_cmd(
+    ffmpeg: str, image: str | Path, seconds: float, out: str | Path, look: Look,
+) -> list[str]:
+    """A still image (the black text screen) held for ``seconds``, with silence."""
+    return [
+        ffmpeg, "-hide_banner", "-nostdin", "-y",
+        "-loop", "1", "-framerate", look.fps, "-i", str(image), *_SILENCE,
+        "-t", f"{seconds:.3f}", "-map", "0:v:0", "-map", "1:a:0",
+        "-vf", _fit_filter(look), *_encode_args(look),
+        "-progress", "pipe:1", "-nostats", "-f", "mp4", str(out),
+    ]
+
+
+def build_join_cmd(ffmpeg: str, concat_list: str | Path, out: str | Path) -> list[str]:
+    """Join pieces that share one encoding, by stream copy (no quality loss)."""
+    return [
+        ffmpeg, "-hide_banner", "-nostdin", "-y",
+        "-f", "concat", "-safe", "0", "-i", str(concat_list),
+        "-map", "0:v:0", "-map", "0:a:0?", "-c", "copy",
+        "-movflags", "+faststart", "-progress", "pipe:1", "-nostats",
+        "-f", "mp4", str(out),
+    ]
 
 
 ProgressFn = Callable[[float], None]  # seconds of output written so far
