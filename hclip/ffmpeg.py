@@ -14,6 +14,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Sequence
@@ -90,11 +92,15 @@ class MediaInfo:
     pix_fmt: str | None = None
     sample_rate: int | None = None
     channels: int | None = None
+    profile: str | None = None
+    level: int | None = None
 
     def join_key(self) -> tuple:
         """Clips from files with the same key can be joined without
-        re-encoding (same codec, picture size, frame rate and audio)."""
-        return (self.video_codec, self.width, self.height, self.fps_str, self.pix_fmt,
+        re-encoding: same codec, profile/level, picture size, standard
+        frame rate and audio."""
+        return (self.video_codec, self.profile, self.level, self.width, self.height,
+                standard_fps(self.fps_str or self.fps), self.pix_fmt,
                 self.audio_codec, self.sample_rate, self.channels)
 
     @property
@@ -128,6 +134,17 @@ def _fps(rate: str | None) -> float | None:
         return None
 
 
+def _nominal_rate(v: dict) -> str | None:
+    """The camera's frame rate. Prefer the stated rate (r_frame_rate): phones
+    record variable frame rate, whose average is an odd fraction. But some
+    phones state a timebase-like guess (90000/1); then use the average."""
+    r, avg = v.get("r_frame_rate"), v.get("avg_frame_rate")
+    rv = _fps(r)
+    if rv and 1 <= rv <= 120:
+        return r
+    return avg if _fps(avg) else r
+
+
 def parse_probe(path: str, data: dict) -> MediaInfo:
     streams = data.get("streams", [])
     fmt = data.get("format", {})
@@ -145,10 +162,10 @@ def parse_probe(path: str, data: dict) -> MediaInfo:
         fps=_fps(v.get("avg_frame_rate") or v.get("r_frame_rate")) if v else None,
         audio_codec=a.get("codec_name") if a else None,
         size_bytes=int(fmt.get("size") or 0),
-        # The stated (nominal) rate, not the average: phones record variable
-        # frame rate, whose average is an odd fraction like 143640/4789.
-        fps_str=(v.get("r_frame_rate") or v.get("avg_frame_rate")) if v else None,
+        fps_str=_nominal_rate(v) if v else None,
         pix_fmt=v.get("pix_fmt") if v else None,
+        profile=v.get("profile") if v else None,
+        level=v.get("level") if v else None,
         sample_rate=int(a["sample_rate"]) if a and a.get("sample_rate") else None,
         channels=a.get("channels") if a else None,
     )
@@ -358,7 +375,10 @@ def build_card_cmd(
     """A still image (the black text screen) held for ``seconds``, with silence."""
     return [
         ffmpeg, "-hide_banner", "-nostdin", "-y",
-        "-loop", "1", "-framerate", look.fps, "-i", str(image), *_SILENCE,
+        # -t on the input too: an unreadable image then ends in an error
+        # instead of looping for ever without producing a frame.
+        "-loop", "1", "-framerate", look.fps, "-t", f"{seconds:.3f}", "-i", str(image),
+        "-t", f"{seconds:.3f}", *_SILENCE,
         "-t", f"{seconds:.3f}", "-map", "0:v:0", "-map", "1:a:0",
         "-vf", _fit_filter(look), *_encode_args(look),
         "-progress", "pipe:1", "-nostats", "-f", "mp4", str(out),
@@ -383,17 +403,23 @@ class Cancelled(Exception):
     pass
 
 
+STALL_SECONDS = 120.0
+
+
 def run(
     cmd: Sequence[str],
     on_progress: ProgressFn | None = None,
     should_stop: Callable[[], bool] | None = None,
+    stall_seconds: float = STALL_SECONDS,
 ) -> None:
     """Run ffmpeg, streaming ``-progress`` output to ``on_progress``.
 
     stderr goes to a temp file (not a pipe) so a chatty ffmpeg can never
     deadlock us, and so it can be shown in full if the command fails.
-    ``should_stop`` is checked on every progress update (~2x a second); when
-    it returns True ffmpeg is killed and ``Cancelled`` raised.
+    A watcher thread checks ``should_stop`` four times a second; when it
+    returns True ffmpeg is killed and ``Cancelled`` raised. If the output
+    position doesn't move for ``stall_seconds``, ffmpeg is assumed stuck,
+    killed, and an FFmpegError raised, so the app can never hang.
     """
     with tempfile.TemporaryFile(mode="w+b") as err:
         proc = subprocess.Popen(
@@ -401,18 +427,52 @@ def run(
             stdin=subprocess.DEVNULL, **_popen_kwargs(),
         )
         assert proc.stdout is not None
-        for raw in proc.stdout:
-            if should_stop and should_stop():
+        state = {"pos": -1.0, "moved": time.monotonic(), "why": None}
+        lock = threading.Lock()
+        finished = threading.Event()
+
+        def watch() -> None:
+            # Runs on its own thread: ffmpeg can hang without printing
+            # anything, so this can't depend on reading its output.
+            while not finished.wait(0.25):
+                with lock:
+                    stalled = time.monotonic() - state["moved"] > stall_seconds
+                if should_stop and should_stop():
+                    state["why"] = "stop"
+                elif stalled:
+                    state["why"] = "stall"
+                else:
+                    continue
                 proc.kill()
-                proc.wait()
-                raise Cancelled()
-            line = raw.decode("utf-8", "replace").strip()
-            if on_progress and line.startswith("out_time_us="):
+                return
+
+        watcher = threading.Thread(target=watch, daemon=True)
+        watcher.start()
+        try:
+            for raw in proc.stdout:
+                line = raw.decode("utf-8", "replace").strip()
+                if not line.startswith("out_time_us="):
+                    continue
                 try:
-                    on_progress(max(0, int(line.split("=", 1)[1])) / 1_000_000)
-                except ValueError:
-                    pass
-        code = proc.wait()
+                    pos = max(0, int(line.split("=", 1)[1])) / 1_000_000
+                except ValueError:       # "N/A": nothing written yet
+                    continue
+                with lock:
+                    if pos != state["pos"]:
+                        state["pos"], state["moved"] = pos, time.monotonic()
+                if on_progress:
+                    on_progress(pos)
+            code = proc.wait()
+        finally:
+            finished.set()
+            watcher.join()
+        if state["why"] == "stop":
+            raise Cancelled()
+        if state["why"] == "stall":
+            err.seek(0)
+            raise FFmpegError(
+                f"ffmpeg stopped making progress for {stall_seconds:.0f}s and was stopped",
+                err.read().decode("utf-8", "replace"))
         if code != 0:
             err.seek(0)
             stderr = err.read().decode("utf-8", "replace")

@@ -207,7 +207,7 @@ const TIME = String.raw`\d{1,3}[:.]\d{2}(?:[:.]\d{2})?`;
 const LEAD_RE = new RegExp(String.raw`^(\s*${TIME}\s*(?:-+|–|—|to)\s*${TIME})`, "i");
 function setLabel(text, lineNo, label) {
   const nl = text.includes("\r\n") ? "\r\n" : "\n";
-  const lines = text.split(/\r\n|\r|\n/);
+  const lines = text.split(/\r\n|[\n\r\u2028\u2029\x85]/);   // same breaks as hclip/notes.py
   const m = LEAD_RE.exec(lines[lineNo - 1] || "");
   if (!m) return text;
   const clean = String(label).replace(/[\r\n]+/g, " ").trim();
@@ -332,7 +332,7 @@ async function refresh() {
   $("cardsHint").textContent = !chk.clips ? "" : labelled
     ? `${labelled} of ${chk.clips} clips have text. Text screens mean the video is re-made, which takes a few minutes.`
     : "No clips have text yet: add it in the list on the left.";
-  $("preciseWrap").hidden = chk.encode;        // re-made videos are exact anyway
+  $("preciseWrap").hidden = $("cards").checked && labelled > 0;   // text screens re-make everything (exact anyway)
   const reel = (r) => `<li><span>${esc(r.name)}</span><span class="meta">${plural(r.clips, "clip")} · ${r.length}${r.exists ? " · will be replaced" : ""}</span></li>`;
   $("reelList").innerHTML = chk.ready
     ? chk.reels.map(reel).join("") + `<li style="border-top:1px solid var(--line);padding-top:4px">${reel(chk.whole).slice(4, -5)}</li>`
@@ -373,13 +373,22 @@ function showDone(st) {
     ? "Press Make again to finish. Work already done is kept." : "");
   $("madeList").innerHTML = [...made, ...skipped].map((r) =>
     `<li><strong>${esc(r.file)}</strong> <span class="hint">${r.length}${r.status === "skipped" ? " · already there" : ""}</span></li>`).join("");
-  $("failList").innerHTML = st.reels.filter((r) => r.missing.length || r.status === "failed").map((r) =>
-    `<li class="${r.status === "failed" ? "fatal" : "warn"}">${esc(r.name)}: ${r.status === "failed" ? "not made" : `left out the clip${r.missing.length > 1 ? "s" : ""} on line ${r.missing.join(", ")}`}
-      ${r.error ? `<details><summary>Details</summary><pre>${esc(r.error)}</pre></details>` : ""}</li>`).join("");
+  const why = (r) => {
+    if (r.status === "failed") return "not made";
+    const bits = [];
+    if (r.missing.length) bits.push(`left out the clip${r.missing.length > 1 ? "s" : ""} on line ${r.missing.join(", ")}`);
+    if (r.missing_screens.length) bits.push(`no text screen for line ${r.missing_screens.join(", ")}`);
+    return bits.join("; ");
+  };
+  $("failList").innerHTML = st.reels.filter((r) => r.missing.length || r.missing_screens.length || r.status === "failed").map((r) =>
+    `<li class="${r.status === "failed" ? "fatal" : "warn"}">${esc(r.name)}: ${why(r)}
+      ${r.error ? (r.error.length < 160 && !r.error.includes("\n") ? `<div>${esc(r.error)}</div>`
+        : `<details><summary>Details</summary><pre>${esc(r.error)}</pre></details>`) : ""}</li>`).join("");
   $("openFolder").dataset.path = st.out_dir;
 }
 
 async function start(what) {
+  $("goHalves").disabled = $("goWhole").disabled = true;
   let cards = null;
   if ($("cards").checked && chk && chk.look) {
     cards = {};
@@ -390,7 +399,7 @@ async function start(what) {
   }
   const res = await api.start($("note").value, $("outDir").value, $("title").value, what, cards,
     Number($("cardSecs").value), $("keepClips").checked, $("precise").checked);
-  if (res.error) { $("status").textContent = res.error; return; }
+  if (res.error) { $("status").textContent = res.error; await refresh(); return; }
   $("setup").hidden = true; $("running").hidden = false; $("done").hidden = true;
   $("barFill").style.width = "0";
   pollTimer = setInterval(poll, 400);

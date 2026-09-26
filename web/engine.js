@@ -59,6 +59,7 @@
     const size = /, (\d{2,5})x(\d{2,5})[, \[]/.exec(vLine);
     const fps = /, ([\d.]+) fps/.exec(vLine);
     const pix = /Video: \w+[^,]*, (\w+)/.exec(vLine);
+    const profile = /Video: \w+ \(([^)]+)\)/.exec(vLine);
     const rate = /, (\d+) Hz/.exec(aLine);
     const ch = /Hz, ([\w.()]+)/.exec(aLine);
     return {
@@ -69,13 +70,17 @@
       height: size ? +size[2] : null,
       fps: fps ? (EXACT_FPS[fps[1]] || fps[1]) : null,
       pixFmt: pix ? pix[1] : null,
+      profile: profile ? profile[1] : null,
       sampleRate: rate ? +rate[1] : null,
       channels: ch ? ch[1] : null,
     };
   }
 
   /** Clips from footage with the same key can be joined without re-encoding. */
-  const joinKey = (i) => [i.video, i.width, i.height, i.fps, i.pixFmt, i.audio, i.sampleRate, i.channels].join("|");
+  // Same idea as hclip/ffmpeg.py join_key: compare the camera's standard rate
+  // (ffmpeg's log shows a rounded average that wobbles on phone footage).
+  const joinKey = (i) => [i.video, i.profile, i.width, i.height, standardFps(i.fps), i.pixFmt,
+    i.audio, i.sampleRate, i.channels].join("|");
 
   // Same as hclip/ffmpeg.py standard_fps: snap to the rate cameras really use.
   const STANDARD_FPS = [[23.976, "24000/1001"], [24, "24"], [25, "25"], [29.97, "30000/1001"], [30, "30"],
@@ -118,8 +123,9 @@
   }
 
   function buildCardArgs(image, seconds, out, look) {
-    return ["-hide_banner", "-nostdin", "-y", "-loop", "1", "-framerate", look.fps, "-i", image,
-      ...SILENCE, "-t", seconds.toFixed(3), "-map", "0:v:0", "-map", "1:a:0",
+    return ["-hide_banner", "-nostdin", "-y", "-loop", "1", "-framerate", look.fps,
+      "-t", seconds.toFixed(3), "-i", image,   // input -t: a bad image errors instead of looping for ever
+      "-t", seconds.toFixed(3), ...SILENCE, "-t", seconds.toFixed(3), "-map", "0:v:0", "-map", "1:a:0",
       "-vf", fitFilter(look), ...encodeArgs(look), "-f", "mp4", out];
   }
 

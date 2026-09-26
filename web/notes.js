@@ -11,6 +11,8 @@
   const TIMEISH_RE = /^\s*\d{1,3}[:.]\d/;
   const TIME_RE = /^(\d{1,3})[:.](\d{2})(?:[:.](\d{2}))?$/;
   const LONG_CLIP_SECONDS = 90;
+  // Same set as hclip/notes.py, including iPhone Notes' U+2028 soft breaks.
+  const LINE_BREAK = /\r\n|[\n\r\u2028\u2029\x85]/;
 
   class TimecodeError extends Error {}
 
@@ -67,7 +69,7 @@
       return s;
     };
 
-    const lines = text.split(/\r\n|\r|\n/);
+    const lines = text.split(LINE_BREAK);
     lines.forEach((raw, i) => {
       const lineno = i + 1;
       const line = raw.trim();
@@ -141,7 +143,7 @@
    *  coach's own times and every other line exactly as typed. */
   function setLabel(text, lineNo, label) {
     const nl = text.includes("\r\n") ? "\r\n" : "\n";
-    const lines = text.split(/\r\n|\r|\n/);
+    const lines = text.split(LINE_BREAK);
     const m = LEAD_RE.exec(lines[lineNo - 1] || "");
     if (!m) return text;
     const clean = String(label).replace(/[\r\n]+/g, " ").trim();

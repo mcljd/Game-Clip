@@ -158,3 +158,39 @@ def test_stop_then_carry_on(phone, videos):
     page.click("#goHalves")
     wait_status(page, "Done: 1 video made")
     assert page.locator("#clipList li").count() == 1
+
+
+def piece_count(page):
+    return page.evaluate("async () => { const t = new ClipTray(); await t.init(); "
+                         "return (await t.all()).filter(x => x.kind === 'piece').length; }")
+
+
+def test_duplicate_section_names_make_two_reels(phone, videos):
+    page = phone
+    page.fill("#title", "T")
+    page.fill("#note", "2nd half\n0:01-0:03\n2nd half\n0:04-0:06\n")
+    pick(page, 0, videos["h1"])
+    pick(page, 1, videos["h2"])
+    page.uncheck("#cards")
+    page.wait_for_timeout(300)
+    page.click("#goHalves")
+    wait_status(page, "Done: 2 videos made")
+    assert page.locator("#clipList .name").all_inner_texts() == ["T - 2nd half.mp4", "T - 2nd half (2).mp4"]
+
+
+def test_leftover_parts_are_cleared_when_timings_change(phone, videos):
+    page = phone
+    page.fill("#note", "0:00-0:55 Long one\n0:56-0:59\n")
+    pick(page, 0, videos["h1"])
+    page.wait_for_timeout(300)
+    page.click("#goHalves")
+    page.wait_for_selector("#running:not([hidden])")
+    page.wait_for_timeout(2500)
+    page.click("#stop")
+    wait_status(page, "Stopped")
+    assert piece_count(page) >= 1                 # kept so it can carry on
+    page.fill("#note", "0:10-0:15 Different\n")   # coach changes the timings
+    page.wait_for_timeout(400)
+    page.click("#goHalves")
+    wait_status(page, "Done: 1 video made")
+    assert piece_count(page) == 0                 # old parts gone, new ones tidied

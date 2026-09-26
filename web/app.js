@@ -78,16 +78,30 @@
       name: clipFilename(j + 1, kept.length, k.section.tag, k.clip.start, k.clip.end, k.clip.label),
     }));
     if (!jobs.length) return { ready: false, message: "None of the clips fit inside the videos.", jobs, problems };
-    const reel = (name, js) => ({ name, jobs: js, file: `${safeName(`${match} - ${name}`)}.mp4`,
-      key: `reel:${match}/${name}`, duration: js.reduce((n, j) => n + j.duration, 0) });
-    const halves = note.sections.map((s) => reel(s.name, jobs.filter((j) => j.section === s))).filter((r) => r.jobs.length);
-    const whole = reel("Whole match", jobs);
     const labelled = jobs.filter((j) => j.clip.label.trim()).length;
     const cards = $("cards").checked && labelled > 0;
-    const mixed = new Set(jobs.map((j) => slots[j.index].joinKey)).size > 1;
-    const encode = cards || mixed;
-    const look = lookFor(slots[jobs[0].index].info, isPhone ? 720 : 1080);
-    return { ready: true, message: "", jobs, problems, halves, whole, labelled, cards, encode, look };
+    const maxH = isPhone ? 720 : 1080;
+    // Like hclip/reel.py: text screens re-make every reel with one shared look;
+    // otherwise each reel is copied if its own clips allow it.
+    const sharedLook = cards ? lookFor(slots[jobs[0].index].info, maxH) : null;
+    const used = {};
+    const reel = (baseName, js) => {
+      const n = used[baseName.toLowerCase()] = (used[baseName.toLowerCase()] || 0) + 1;
+      const name = n === 1 ? baseName : `${baseName} (${n})`;   // two "2nd half"s mustn't clash
+      const copy = !cards && new Set(js.map((j) => slots[j.index].joinKey)).size === 1;
+      const look = sharedLook || (copy ? null : lookFor(slots[js[0].index].info, maxH));
+      const duration = js.reduce((t, j) => t + j.duration, 0);
+      // Rough output size, to stop a reel too big for the browser to join.
+      const bytes = look
+        ? duration * (look.height >= 1080 ? 1.2e6 : 0.6e6)
+        : js.reduce((t, j) => t + slots[j.index].size / slots[j.index].duration * j.duration, 0);
+      return { name, jobs: js, file: `${safeName(`${match} - ${name}`)}.mp4`,
+        key: `reel:${match}/${name}`, duration, look, bytes };
+    };
+    const halves = note.sections.map((s) => reel(s.name, jobs.filter((j) => j.section === s))).filter((r) => r.jobs.length);
+    const whole = reel("Whole match", jobs);
+    const encode = cards || halves.some((r) => r.look) || !!whole.look;
+    return { ready: true, message: "", jobs, problems, halves, whole, labelled, cards, encode };
   }
 
   // -------------------------------------------------------------- render
@@ -266,13 +280,13 @@
       const out = [];
       const text = j.clip.label.trim();
       if (p.cards && text) {
-        const sig = hash(JSON.stringify(["card", text, secs, p.look]));
-        pieces.set(sig, pieces.get(sig) || { sig, kind: "card", job: j, text, seconds: secs });
+        const sig = hash(JSON.stringify(["card", text, secs, r.look]));
+        pieces.set(sig, pieces.get(sig) || { sig, kind: "card", job: j, text, seconds: secs, look: r.look });
         out.push(sig);
       }
-      const sig = p.encode ? hash(JSON.stringify(["enc", src, j.start, j.end, p.look]))
+      const sig = r.look ? hash(JSON.stringify(["enc", src, j.start, j.end, r.look]))
         : hash(JSON.stringify(["copy", src, j.start, j.end, precise]));
-      pieces.set(sig, pieces.get(sig) || { sig, kind: p.encode ? "enc" : "copy", job: j, seconds: j.duration });
+      pieces.set(sig, pieces.get(sig) || { sig, kind: r.look ? "enc" : "copy", job: j, seconds: j.duration, look: r.look });
       out.push(sig);
       return out;
     }));
@@ -296,9 +310,22 @@
     const p = renderPlan();
     if (!p.ready) return;
     const reels = what === "whole" ? [p.whole] : p.halves;
+    // The browser has to hold a finished video in memory twice while saving
+    // it; past this it fails or the phone closes the page.
+    const limit = isPhone ? 1.2e9 : 2e9;
+    const tooBig = reels.find((r) => r.bytes > limit);
+    if (tooBig) {
+      $("status").textContent = `${tooBig.name} would be about ${size(tooBig.bytes)}, too big for ` +
+        `${isPhone ? "the phone" : "the browser"} to put together. ` +
+        (what === "whole" ? "Make half reels instead, or " : "") +
+        (p.cards ? "use fewer or shorter clips." : "tick the text screens option (it makes a smaller 720p video)" +
+          (isPhone ? "" : ", or use the Windows app") + ".");
+      return;
+    }
     const precise = $("precise").checked;
     const keepClips = $("keepClips").checked;
     const { pieces, reelPieces } = piecesFor(p, reels);
+    const kindOf = new Map(pieces.map((pc) => [pc.sig, pc.kind]));
 
     stopping = false; lastFailures = [];
     setRunning(true);
@@ -306,6 +333,12 @@
     await keepAwake();
     $("status").textContent = isPhone ? "Keep this screen open until it's finished." : "";
 
+    // Throw away parts left from an earlier, different run (e.g. stopped,
+    // then the timings changed) so they don't fill the phone's storage.
+    const needed = new Set(pieces.map((pc) => `piece:${pc.sig}`));
+    for (const rec of await tray.all()) {
+      if (rec.kind === "piece" && !needed.has(rec.key)) await tray.delete(rec.key);
+    }
     const todo = [];
     for (const pc of pieces) if (!(await tray.has(`piece:${pc.sig}`))) todo.push(pc);
     const total = todo.reduce((n, pc) => n + pc.seconds, 0) + reels.reduce((n, r) => n + r.duration * JOIN_WEIGHT, 0) || 1;
@@ -328,10 +361,10 @@
       try {
         let blob;
         if (pc.kind === "card") {
-          const png = await window.Cards.cardBlob(pc.text, p.look.width, p.look.height);
-          blob = await engine.encodeCard(png, pc.seconds, p.look, { onProgress });
+          const png = await window.Cards.cardBlob(pc.text, pc.look.width, pc.look.height);
+          blob = await engine.encodeCard(png, pc.seconds, pc.look, { onProgress });
         } else if (pc.kind === "enc") {
-          blob = await engine.encodeClip(j.index, j.start, j.duration, p.look, { onProgress });
+          blob = await engine.encodeClip(j.index, j.start, j.duration, pc.look, { onProgress });
         } else {
           blob = await engine.cut(j.index, j.start, j.duration, { precise, onProgress });
         }
@@ -340,7 +373,7 @@
         blob = null;
       } catch (e) {
         if (stopping) break;
-        failedLines.add(j.clip.line);
+        if (pc.kind !== "card") failedLines.add(j.clip.line);   // a failed screen leaves the clip in
         lastFailures.push({ line: j.clip.line, message: `the ${pc.kind === "card" ? "text screen" : "clip"} couldn't be made. ${e.message || e}`, details: e.details || "" });
       }
       done += pc.seconds;
@@ -355,11 +388,14 @@
         show(stage);
         try {
           const blobs = [];
+          let clips = 0;
           for (const sig of reelPieces[r]) {
             const rec = await tray.get(`piece:${sig}`);
-            if (rec) blobs.push(rec.blob);
+            if (!rec) continue;
+            blobs.push(rec.blob);
+            if (kindOf.get(sig) !== "card") clips++;
           }
-          if (!blobs.length) throw new Error("none of its clips could be made.");
+          if (!clips) throw new Error("none of its clips could be made.");
           let blob = await engine.join(blobs, { onProgress: (s) => show(stage, Math.min(s, reel.duration) * JOIN_WEIGHT) });
           if (dir) await writeToFolder(dir, reel.file, blob);
           else await tray.put({ key: reel.key, kind: "reel", name: reel.file, match: reel.jobs[0].match,

@@ -105,6 +105,15 @@ def section_tag(name: str, position: int) -> str | None:
     return None
 
 
+# Line breaks, the same set web/notes.js uses, so both count lines alike.
+# Includes U+2028/U+2029, which iPhone Notes can put in pasted text.
+_LINE_BREAK = re.compile("\r\n|[\n\r\u2028\u2029\x85]")
+
+
+def split_lines(text: str) -> list[str]:
+    return _LINE_BREAK.split(text)
+
+
 def parse(text: str) -> Note:
     title = ""
     sections: list[Section] = []
@@ -118,7 +127,7 @@ def parse(text: str) -> Note:
         sections.append(s)
         return s
 
-    for lineno, raw in enumerate(text.splitlines(), start=1):
+    for lineno, raw in enumerate(split_lines(text), start=1):
         line = raw.strip()
         if not line:
             continue

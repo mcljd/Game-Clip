@@ -59,10 +59,15 @@ def plan_reels(note: Note, jobs: Sequence[Job], out_dir: Path, title: str, *,
                halves: bool = True, whole: bool = False) -> list[Reel]:
     reels: list[Reel] = []
     if halves:
+        used: dict[str, int] = {}
         for s in note.sections:
             mine = [j for j in jobs if j.section_tag == s.tag]
-            if mine:
-                reels.append(Reel(s.name, mine, out_dir / reel_filename(title, s.name)))
+            if not mine:
+                continue
+            # Two sections called "2nd half" mustn't overwrite each other.
+            n = used[s.name.lower()] = used.get(s.name.lower(), 0) + 1
+            name = s.name if n == 1 else f"{s.name} ({n})"
+            reels.append(Reel(name, mine, out_dir / reel_filename(title, name)))
     if whole and jobs:
         reels.append(Reel("Whole match", list(jobs), out_dir / reel_filename(title, "Whole match")))
     return reels
@@ -100,7 +105,8 @@ class ReelResult:
     reel: Reel
     status: str             # "made" | "skipped" | "failed"
     error: str = ""
-    missing: tuple[int, ...] = ()   # note lines of clips left out (failed)
+    missing: tuple[int, ...] = ()          # note lines of clips left out (failed)
+    missing_screens: tuple[int, ...] = ()  # lines whose text screen failed (clip kept)
 
 
 @dataclass
@@ -108,10 +114,18 @@ class _Piece:
     path: Path
     cmd: list[str]
     seconds: float
-    label: str
-    job: Job | None = None
+    kind: str                  # "clip" | "card"
+    job: Job
     done: bool = False
     error: str = ""
+
+
+_PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
+def _locked_message(path: Path, e: OSError) -> str:
+    return (f"Couldn't write {path.name}. If it's open in a video player or another "
+            f"program, close it and try again. ({e.strerror or e})")
 
 
 @dataclass
@@ -150,14 +164,22 @@ def run_reels(
 
     work = todo[0].out.parent / WORK_DIR
     work.mkdir(parents=True, exist_ok=True)
-    all_jobs = {id(j): j for r in todo for j in r.jobs}.values()
-    encode = bool(card_images) or not all(can_copy(r.jobs) for r in todo)
-    look = look_for(list(all_jobs), preset=preset) if encode else None
+    all_jobs = list({id(j): j for r in todo for j in r.jobs}.values())
+    # Text screens need every reel re-encoded to one look. Without them each
+    # reel is copied if its own clips allow it (a half filmed differently
+    # from the other half doesn't slow down that half's reel).
+    shared_look = look_for(all_jobs, preset=preset) if card_images else None
 
-    # One piece per clip (and per text screen), shared between reels.
+    def reel_look(r: Reel) -> ffmpeg.Look | None:
+        if shared_look is not None:
+            return shared_look
+        return None if can_copy(r.jobs) else look_for(r.jobs, preset=preset)
+
+    # One piece per clip (and per text screen), shared between reels. Pieces
+    # live in the work folder named by their content, so reuse is always safe.
     pieces: dict[str, _Piece] = {}
 
-    def clip_piece(j: Job) -> _Piece:
+    def clip_piece(j: Job, look: ffmpeg.Look | None) -> _Piece:
         if look is not None:
             key = _sig("enc", str(j.half.files), j.start, j.end, look)
             path = work / f"clip_{key}.mp4"
@@ -167,33 +189,35 @@ def run_reels(
                 has_audio=bool(j.half.info and j.half.info.audio_codec))
         else:
             key = _sig("copy", str(j.half.files), j.start, j.end, precise)
-            if keep_clips_dir is not None:
-                path = keep_clips_dir / j.out.name
-            else:
-                path = work / f"clip_{key}.mp4"
+            path = work / f"clip_{key}.mp4"
             cmd = ffmpeg.build_cut_cmd(
                 ff, j.half.source(), j.start, j.duration, path, precise=precise,
                 reencode_audio=j.half.reencode_audio, is_concat=j.half.is_concat,
                 hevc=j.half.hevc)
-        return pieces.setdefault(key, _Piece(path, cmd, j.duration, f"clip on line {j.clip.line}", j))
+        return pieces.setdefault(key, _Piece(path, cmd, j.duration, "clip", j))
 
-    def card_piece(j: Job) -> _Piece | None:
+    def card_piece(j: Job, look: ffmpeg.Look | None) -> _Piece | None:
         img = card_images.get(j.clip.line)
         if img is None or look is None:
             return None
-        key = _sig("card", img.read_bytes(), card_seconds, look)
+        data = img.read_bytes()
+        key = _sig("card", data, card_seconds, look)
         path = work / f"card_{key}.mp4"
         cmd = ffmpeg.build_card_cmd(ff, img, card_seconds, path, look)
-        return pieces.setdefault(key, _Piece(path, cmd, card_seconds, f"text screen for line {j.clip.line}", j))
+        piece = pieces.setdefault(key, _Piece(path, cmd, card_seconds, "card", j))
+        if not data.startswith(_PNG_MAGIC):
+            piece.error = f"The text screen for line {j.clip.line} isn't a readable image."
+        return piece
 
     builds: list[_Build] = []
     for r in todo:
         b = _Build(r)
+        look = reel_look(r)
         for j in r.jobs:
-            c = card_piece(j)
+            c = card_piece(j, look)
             if c:
                 b.pieces.append(c)
-            b.pieces.append(clip_piece(j))
+            b.pieces.append(clip_piece(j, look))
         builds.append(b)
 
     # Work out the total so progress and time-left are honest.
@@ -228,8 +252,10 @@ def run_reels(
         if should_stop and should_stop():
             stopped = True
             break
-        if p.path.exists():   # pieces are named by their content, so reuse is safe
+        if p.path.exists():
             p.done = True
+            continue
+        if p.error:              # known bad before starting (e.g. unreadable image)
             continue
         stage = f"Making piece {n} of {len(ordered)}"
         try:
@@ -240,6 +266,8 @@ def run_reels(
             break
         except ffmpeg.FFmpegError as e:
             p.error = str(e)
+        except OSError as e:
+            p.error = _locked_message(p.path, e)
         done += p.seconds
         report(stage)
 
@@ -250,10 +278,12 @@ def run_reels(
             ok = False
             continue
         usable = [p for p in b.pieces if p.done]
-        missing = tuple(sorted({p.job.clip.line for p in b.pieces if not p.done and p.job}))
+        missing = tuple(sorted({p.job.clip.line for p in b.pieces if p.kind == "clip" and not p.done}))
+        screens = tuple(sorted({p.job.clip.line for p in b.pieces if p.kind == "card" and not p.done}))
         why = next((p.error for p in b.pieces if p.error), "")
-        if not usable:
-            results.append(ReelResult(b.reel, "failed", why or "None of its clips could be made.", missing))
+        if not any(p.kind == "clip" for p in usable):
+            results.append(ReelResult(b.reel, "failed", why or "None of its clips could be made.",
+                                      missing, screens))
             ok = False
             continue
         listing = work / f"join_{_sig(b.reel.out.name)}.ffconcat"
@@ -262,26 +292,33 @@ def run_reels(
         try:
             run_step(ffmpeg.build_join_cmd(ff, listing, b.reel.out), b.reel.out,
                      b.reel.duration, join_weight, stage)
-            results.append(ReelResult(b.reel, "made", why, missing))
-            ok &= not missing
+            results.append(ReelResult(b.reel, "made", why, missing, screens))
+            ok &= not (missing or screens)
         except ffmpeg.Cancelled:
             results.append(ReelResult(b.reel, "failed", "Stopped."))
             ok = False
             stopped = True
         except ffmpeg.FFmpegError as e:
-            results.append(ReelResult(b.reel, "failed", str(e), missing))
+            results.append(ReelResult(b.reel, "failed", str(e), missing, screens))
+            ok = False
+        except OSError as e:
+            results.append(ReelResult(b.reel, "failed", _locked_message(b.reel.out, e), missing, screens))
             ok = False
         finally:
             listing.unlink(missing_ok=True)
         done += b.reel.duration * join_weight
         report(stage)
 
-    if keep_clips_dir is not None and look is not None and not stopped:
-        # Re-encoded reel: also keep each clip (without its text screen).
+    if keep_clips_dir is not None and not stopped:
+        # Also keep each clip (without its text screen), written fresh every
+        # run so a changed video or setting never leaves a stale clip.
         keep_clips_dir.mkdir(parents=True, exist_ok=True)
         for p in pieces.values():
-            if p.done and p.job and p.path.name.startswith("clip_"):
-                shutil.copy2(p.path, keep_clips_dir / p.job.out.name)
+            if p.done and p.kind == "clip":
+                try:
+                    shutil.copy2(p.path, keep_clips_dir / p.job.out.name)
+                except OSError:
+                    ok = False
 
     if ok:
         shutil.rmtree(work, ignore_errors=True)

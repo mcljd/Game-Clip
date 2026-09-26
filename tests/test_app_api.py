@@ -101,3 +101,20 @@ def test_cancel_stops_mid_clip_and_leaves_no_part(videos, tmp_path):
     st = api.status()
     assert st["cancelled"] and st["made"] == 0
     assert not list(tmp_path.glob("*.mp4")) and not list(tmp_path.rglob("*.part"))
+
+
+@needs_ffmpeg
+def test_double_click_starts_only_one_run(videos, tmp_path):
+    import threading
+    api = Api()
+    api.set_videos(0, [str(videos["h1"])])
+    out = []
+    barrier = threading.Barrier(2)
+    def go():
+        barrier.wait()
+        out.append(api.start("0:10-0:16\n0:31-0:40", str(tmp_path), "T", "halves"))
+    ts = [threading.Thread(target=go) for _ in range(2)]
+    [t.start() for t in ts]; [t.join() for t in ts]
+    api.wait(60)
+    assert sorted("ok" in r for r in out) == [False, True]
+    assert [r["status"] for r in api.status()["reels"]] == ["made"]

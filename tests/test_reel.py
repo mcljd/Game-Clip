@@ -111,7 +111,8 @@ def test_stop_keeps_finished_pieces_and_resume_reuses_them(videos, tmp_path):
     assert all(r.status == "failed" for r in res)
     work = tmp_path / reel.WORK_DIR
     made = [p for p in work.glob("clip_*.mp4")]
-    assert len(made) == 1 and not list(work.glob("*.part"))
+    # Stopped part-way: some pieces kept (3 in total), nothing half-written.
+    assert 1 <= len(made) < 3 and not list(work.glob("*.part"))
 
     stages.clear()
     res = reel.run_reels(reels, on_progress=lambda p: stages.append(p.stage))
@@ -133,3 +134,81 @@ def test_keep_clips_too(videos, tmp_path):
 ])
 def test_standard_fps(rate, expected):
     assert ffmpeg.standard_fps(rate) == expected
+
+
+def test_nominal_frame_rate_ignores_timebase_guesses():
+    v = {"codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080,
+         "r_frame_rate": "90000/1", "avg_frame_rate": "30000/1001", "profile": "High", "level": 42}
+    info = ffmpeg.parse_probe("x", {"format": {"duration": "10"}, "streams": [v]})
+    assert info.fps_str == "30000/1001"
+    v2 = dict(v, r_frame_rate="30/1", avg_frame_rate="143640/4789")   # VFR phone
+    assert ffmpeg.parse_probe("x", {"format": {}, "streams": [v2]}).fps_str == "30/1"
+
+
+def test_join_key_compares_standard_rate_and_profile():
+    base = dict(path="x", duration=1, container="mp4", video_codec="h264", width=1920, height=1080,
+                fps=29.98, audio_codec="aac", size_bytes=0, pix_fmt="yuv420p", sample_rate=48000,
+                channels=2, profile="High", level=42)
+    a = ffmpeg.MediaInfo(**base, fps_str="2998/100")
+    b = ffmpeg.MediaInfo(**base, fps_str="30000/1001")
+    assert a.join_key() == b.join_key()                     # both really 29.97
+    c = ffmpeg.MediaInfo(**{**base, "profile": "Main"}, fps_str="30000/1001")
+    assert a.join_key() != c.join_key()
+
+
+def test_duplicate_section_names_get_their_own_reels(videos, tmp_path):
+    note, jobs = _jobs("2nd half\n0:01-0:03\n2nd half\n0:04-0:06", [[videos["h1"]], [videos["h2"]]], tmp_path)
+    reels = reel.plan_reels(note, jobs, tmp_path, "T", halves=True)
+    assert [r.out.name for r in reels] == ["T - 2nd half.mp4", "T - 2nd half (2).mp4"]
+
+
+@needs_ffmpeg
+def test_kept_clips_are_never_stale(videos, tmp_path):
+    note, jobs = _jobs("0:11-0:16", [[videos["h1"]]], tmp_path)
+    reels = reel.plan_reels(note, jobs, tmp_path, "T", halves=True)
+    keep = tmp_path / "Clips"
+    reel.run_reels(reels, keep_clips_dir=keep, force=True)
+    [clip] = keep.iterdir()
+    assert _dur(clip) > 5.5                  # copy starts on the keyframe at 0:10
+    reel.run_reels(reels, keep_clips_dir=keep, force=True, precise=True)
+    assert abs(_dur(clip) - 5) < 0.15        # re-made exactly, not the old file
+
+
+@needs_ffmpeg
+def test_locked_reel_file_is_reported_and_others_still_made(videos, tmp_path, monkeypatch):
+    note, jobs = _jobs(NOTE, [[videos["h1"]], [videos["h2"]]], tmp_path)
+    reels = reel.plan_reels(note, jobs, tmp_path, "T", halves=True)
+    real = reel.os.replace
+
+    def replace(src, dst):
+        if str(dst).endswith("T - 1st Half.mp4"):
+            raise PermissionError(13, "The process cannot access the file")
+        return real(src, dst)
+    monkeypatch.setattr(reel.os, "replace", replace)
+    first, second = reel.run_reels(reels)
+    assert first.status == "failed" and "close it and try again" in first.error
+    assert second.status == "made"
+
+
+@needs_ffmpeg
+def test_half_reels_copy_each_half_even_if_cameras_differ(videos, tmp_path):
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(videos["h2"]), "-vf", "scale=640:360",
+                    "-c:v", "libx264", "-preset", "ultrafast", "-g", "50", "-c:a", "aac",
+                    str(tmp_path / "phone640.mp4")], check=True)
+    note, jobs = _jobs("0:10-0:14\n2nd half\n0:02-0:05", [[videos["h1"]], [tmp_path / "phone640.mp4"]], tmp_path / "o")
+    h1, h2 = reel.plan_reels(note, jobs, tmp_path / "o", "M", halves=True)
+    res = reel.run_reels([h1, h2])
+    assert [r.status for r in res] == ["made", "made"]
+    assert ffmpeg.probe(h2.out).width == 640      # copied as filmed, not re-encoded to 320
+
+
+@needs_ffmpeg
+def test_failed_text_screen_keeps_the_clip(videos, tmp_path):
+    note, jobs = _jobs("0:10-0:16 A\n0:31-0:40 B", [[videos["h1"]]], tmp_path)
+    reels = reel.plan_reels(note, jobs, tmp_path, "T", halves=True)
+    bad = tmp_path / "bad.png"
+    bad.write_bytes(b"not a png")
+    [res] = reel.run_reels(reels, card_images={1: bad, 2: black_card(tmp_path / "ok.png")}, card_seconds=2)
+    assert res.status == "made"
+    assert res.missing == () and res.missing_screens == (1,)
+    assert abs(_dur(reels[0].out) - (6 + 9 + 2)) < 0.5

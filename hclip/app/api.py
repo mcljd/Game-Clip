@@ -201,26 +201,34 @@ class Api:
               keep_clips: bool = False, precise: bool = False) -> dict:
         """``what`` is "halves" (one reel per half) or "whole" (one video).
         ``cards`` maps a note line (as a string, from JS) to a PNG as base64."""
+        # Claim the run under the lock before doing anything else, so a
+        # double-click (each JS call runs on its own thread) can't start two.
         with self._lock:
             if self._state.running:
                 return {"error": "Already making videos."}
-        chk = self.check(text, out_dir, title, bool(cards))
-        if not chk["ready"]:
-            return {"error": chk["message"]}
-        note, p = self._plan(text, out_dir)
-        out = Path(out_dir)
-        reels = reel.plan_reels(note, p.jobs, out, title,
-                                halves=what == "halves", whole=what == "whole")
-        card_images = {}
-        if cards:
-            card_dir = Path(tempfile.mkdtemp(prefix="gaa-cards-"))
-            for line, b64 in cards.items():
-                path = card_dir / f"card_{int(line)}.png"
-                path.write_bytes(base64.b64decode(b64.split(",")[-1]))
-                card_images[int(line)] = path
+            self._state = _RunState(running=True, out_dir=out_dir)
+        try:
+            chk = self.check(text, out_dir, title, bool(cards))
+            if not chk["ready"]:
+                raise ValueError(chk["message"])
+            note, p = self._plan(text, out_dir)
+            out = Path(out_dir)
+            reels = reel.plan_reels(note, p.jobs, out, title,
+                                    halves=what == "halves", whole=what == "whole")
+            card_images = {}
+            if cards:
+                card_dir = Path(tempfile.mkdtemp(prefix="gaa-cards-"))
+                for line, b64 in cards.items():
+                    path = card_dir / f"card_{int(line)}.png"
+                    path.write_bytes(base64.b64decode(b64.split(",")[-1]))
+                    card_images[int(line)] = path
+        except Exception as e:
+            with self._lock:
+                self._state = _RunState()
+            return {"error": str(e) or "Couldn't start."}
         self._stop.clear()
         with self._lock:
-            self._state = _RunState(running=True, total=len(reels), out_dir=out_dir)
+            self._state.total = len(reels)
         self._thread = threading.Thread(
             target=self._work,
             args=(reels, card_images, float(card_seconds),
@@ -244,6 +252,7 @@ class Api:
                 self._state.reels = [
                     {"name": r.reel.name, "file": r.reel.out.name, "status": r.status,
                      "error": r.error, "missing": list(r.missing),
+                     "missing_screens": list(r.missing_screens),
                      "length": timecode.fmt(r.reel.duration)}
                     for r in results]
                 self._state.made = sum(r.status == "made" for r in results)
