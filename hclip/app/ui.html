@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GAA Clips</title>
+<style>
+  :root {
+    --bg: #fbf8f8; --card: #ffffff; --ink: #22161a; --muted: #6d5a5f;
+    --line: #ebe1e3; --accent: #6e1423; --accent-ink: #ffffff; --accent-soft: #f7ecee;
+    --accent-deep: #4f0d19; --warn: #8a5300; --warn-soft: #fff3dc; --bad: #c62828; --bad-soft: #fdecea;
+    --chip: #f3eced; --focus: #1d6fd6;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 18px 20px 40px; }
+  header { background: var(--accent); color: var(--accent-ink); padding: 12px 20px; }
+  .header-inner { max-width: 940px; margin: 0 auto; display: flex; align-items: center; gap: 14px; }
+  header h1 { font-size: 20px; margin: 0; white-space: nowrap; text-transform: uppercase; letter-spacing: .06em;
+    display: flex; align-items: center; gap: 10px; }
+  header input { flex: 1; font-size: 18px; font-weight: 600; border-color: transparent; }
+  h2 { text-transform: uppercase; letter-spacing: .08em; font-size: 13px; color: var(--accent); }
+  button.primary:hover:not(:disabled) { background: var(--accent-deep); }
+  button:not(.primary):not(.link) { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .opts input { accent-color: var(--accent); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  h2 { font-size: 15px; margin: 0 0 10px; display: flex; gap: 8px; align-items: baseline; }
+  h2 .n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent); color: var(--accent-ink); font-size: 12px; flex: none; }
+  .hint { color: var(--muted); font-size: 13px; }
+  input[type=text], textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--card); color: var(--ink); font: inherit; }
+  textarea { min-height: 320px; resize: vertical; font-family: Consolas, ui-monospace, monospace; font-size: 14px; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  button { font: inherit; border-radius: 8px; border: 1px solid var(--line); background: var(--card);
+    color: var(--ink); padding: 7px 14px; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--muted); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
+    font-weight: 600; font-size: 17px; padding: 12px 22px; width: 100%; }
+  button.link { border: none; background: none; color: var(--muted); padding: 2px 4px; text-decoration: underline; }
+  .summary { margin-top: 8px; font-size: 13px; }
+  .problems { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+  .problems li { font-size: 13px; padding: 5px 8px; border-radius: 6px; }
+  .problems li.fatal { background: var(--bad-soft); color: var(--bad); }
+  .problems li.warn { background: var(--warn-soft); color: var(--warn); }
+  .slot { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+  .slot.done { border-color: var(--accent); background: var(--accent-soft); }
+  .slot-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .slot-head strong { font-size: 15px; }
+  .file { font-size: 13px; margin-top: 6px; word-break: break-all; }
+  .file .meta { color: var(--muted); }
+  .err { color: var(--bad); font-size: 13px; margin-top: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .chip { background: var(--chip); border-radius: 4px; padding: 1px 6px; font-size: 12px;
+    font-variant-numeric: tabular-nums; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row input { flex: 1; }
+  .opts { display: grid; gap: 6px; margin: 12px 0 14px; font-size: 14px; }
+  .opts label { display: flex; gap: 8px; align-items: flex-start; }
+  .opts .hint { display: block; }
+  .status { margin-top: 10px; font-size: 14px; color: var(--muted); min-height: 1.4em; }
+  .bar { height: 12px; border-radius: 6px; background: var(--chip); overflow: hidden; margin: 10px 0 6px; }
+  .bar > div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+  .progress-line { font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+  .done-box { text-align: center; padding: 8px 0; }
+  .done-box .big { font-size: 22px; font-weight: 700; margin: 4px 0 10px; }
+  .done-box .row { justify-content: center; }
+  details { margin-top: 10px; font-size: 13px; }
+  pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: var(--chip);
+    padding: 8px; border-radius: 6px; max-height: 200px; overflow: auto; }
+  .banner { background: var(--bad-soft); color: var(--bad); padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-inner">
+    <h1><svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="#fff"/>
+      <path d="M6 10c4 3 4 9 0 12M26 10c-4 3-4 9 0 12" fill="none" stroke="#6e1423" stroke-width="2.4" stroke-linecap="round"/></svg>
+      GAA Clips</h1>
+    <input type="text" id="title" placeholder="Match name, e.g. Dunloy v Loughgiel" aria-label="Match name">
+  </div>
+</header>
+<main>
+  <div class="banner" id="ffmpegBanner" hidden></div>
+
+  <div class="grid">
+    <section class="card">
+      <h2><span class="n">1</span> Paste the clip timings</h2>
+      <textarea id="note" spellcheck="false" placeholder="Copy the timings from your phone and paste them here, e.g.
+
+Dunloy clips
+1:52-2:10
+3:05-3:33 point from play
+
+2nd Half Video
+3:04-3:37"></textarea>
+      <div class="summary" id="summary"></div>
+      <ul class="problems" id="noteProblems"></ul>
+    </section>
+
+    <div>
+      <section class="card">
+        <h2><span class="n">2</span> Choose the videos</h2>
+        <p class="hint" style="margin:0 0 10px">One video for each half. If a half was recorded as
+          several files, pick them all together.</p>
+        <div id="slots"></div>
+      </section>
+
+      <section class="card" style="margin-top:16px">
+        <h2><span class="n">3</span> Make the clips</h2>
+        <div id="setup">
+          <div class="hint" style="margin-bottom:4px">Save clips to</div>
+          <div class="row">
+            <input type="text" id="outDir" aria-label="Save clips to">
+            <button id="chooseOut">Change…</button>
+          </div>
+          <div class="opts">
+            <label><input type="checkbox" id="precise">
+              <span>Exact start times <span class="hint">Slower. Normally clips may start a second or two early.</span></span></label>
+            <label id="redoWrap" hidden><input type="checkbox" id="redo">
+              <span>Make again the clips already in the folder <span class="hint" id="redoHint"></span></span></label>
+          </div>
+          <ul class="problems" id="planProblems"></ul>
+          <button class="primary" id="go" disabled>Make clips</button>
+          <div class="status" id="status"></div>
+        </div>
+
+        <div id="running" hidden>
+          <div class="bar"><div id="barFill"></div></div>
+          <div class="progress-line"><span id="progText"></span><span id="progEta"></span></div>
+          <div style="margin-top:12px"><button id="cancel">Stop</button></div>
+        </div>
+
+        <div id="done" class="done-box" hidden>
+          <div id="doneTitle" class="big"></div>
+          <div id="doneDetail" class="hint"></div>
+          <ul class="problems" id="failList" style="text-align:left"></ul>
+          <div class="row" style="margin-top:14px">
+            <button class="primary" id="openFolder" style="width:auto">Open folder</button>
+            <button id="again">Back</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let api = null;
+let note = { sections: [], clip_count: 0, problems: [], title: "" };
+let slots = {};          // index -> info from Python
+let titleEdited = false, outEdited = false;
+let pollTimer = null;
+
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+
+function sectionsForSlots() {
+  if (note.sections.length) return note.sections;
+  return [{ name: "1st Half", clips: [] }, { name: "2nd Half", clips: [] }];
+}
+
+function renderProblems(el, problems) {
+  el.innerHTML = problems
+    .slice().sort((a, b) => a.line - b.line)
+    .map((p) => `<li class="${p.fatal ? "fatal" : "warn"}">Line ${p.line}: ${esc(p.message)}</li>`)
+    .join("");
+}
+
+function renderNote() {
+  const s = note.sections;
+  $("summary").innerHTML = note.clip_count
+    ? `<strong>${note.clip_count} clip${note.clip_count === 1 ? "" : "s"}</strong> · ` +
+      s.map((x) => `${esc(x.name)}: ${x.clips.length}`).join(" · ")
+    : "";
+  renderProblems($("noteProblems"), note.problems);
+  if (!titleEdited && note.title) $("title").value = note.title.replace(/\s+clips?$/i, "");
+}
+
+function renderSlots() {
+  $("slots").innerHTML = sectionsForSlots().map((s, i) => {
+    const info = slots[i];
+    const chips = s.clips.map((c) => `<span class="chip">${c.start}–${c.end}</span>`).join("");
+    let body = "";
+    if (info && info.error) body = `<div class="err">${esc(info.error)}</div>`;
+    else if (info) body = info.files.map((f) => `<div class="file">${esc(f)}</div>`).join("") +
+      `<div class="file meta">${info.duration} long · ${info.size}${info.files.length > 1 ? " · joined in order" : ""}</div>`;
+    return `<div class="slot ${info && !info.error ? "done" : ""}">
+      <div class="slot-head"><strong>${esc(s.name)}</strong>
+        <span>${info && !info.error ? `<button class="link" data-clear="${i}">Remove</button>` : ""}
+        <button data-pick="${i}">${info && !info.error ? "Change…" : "Choose video…"}</button></span></div>
+      ${body}${chips ? `<div class="chips">${chips}</div>` : ""}
+    </div>`;
+  }).join("");
+}
+
+async function refresh() {
+  const text = $("note").value;
+  note = await api.read_note(text);
+  renderNote();
+  renderSlots();
+  if (!outEdited) $("outDir").value = await api.default_folder($("title").value);
+  const chk = await api.check(text, $("outDir").value);
+  renderProblems($("planProblems"), chk.problems.filter((p) => p.fatal || !note.problems.some((q) => q.line === p.line && q.message === p.message)));
+  $("go").disabled = !chk.ready;
+  const toMake = chk.clips - ($("redo").checked ? 0 : chk.existing);
+  $("go").textContent = chk.ready ? `Make ${chk.clips} clip${chk.clips === 1 ? "" : "s"}` : "Make clips";
+  $("redoWrap").hidden = !chk.existing;
+  $("redoHint").textContent = chk.existing ? `${chk.existing} of ${chk.clips} already made; they'll be skipped unless ticked.` : "";
+  $("status").textContent = chk.ready ? (toMake === 0 ? "All clips already made - tick above to make them again." : "") : chk.message;
+}
+const refreshSoon = debounce(refresh, 250);
+
+async function pick(i) {
+  const info = await api.choose_videos(i);
+  if (info) slots[i] = info;
+  await refresh();
+}
+
+function fmtEta(s) {
+  if (s == null) return "";
+  if (s < 60) return `about ${Math.max(1, s)} s left`;
+  return `about ${Math.round(s / 60)} min left`;
+}
+
+async function poll() {
+  const st = await api.status();
+  $("barFill").style.width = `${Math.round(st.overall * 100)}%`;
+  $("progText").textContent = st.total ? `Clip ${st.number} of ${st.total}${st.current ? " - " + st.current : ""}` : "Starting…";
+  $("progEta").textContent = fmtEta(st.remaining);
+  if (st.finished) { clearInterval(pollTimer); showDone(st); }
+}
+
+function showDone(st) {
+  $("running").hidden = true; $("done").hidden = false;
+  const made = st.made, failed = st.failed.length;
+  $("doneTitle").textContent = st.error ? "Something went wrong"
+    : st.cancelled ? `Stopped - ${made} clip${made === 1 ? "" : "s"} made`
+    : failed ? `${made} made, ${failed} failed` : `${made + st.skipped} clips ready`;
+  const bits = [];
+  if (st.skipped) bits.push(`${st.skipped} were already there`);
+  if (st.cancelled) bits.push("press Make clips again to finish the rest");
+  $("doneDetail").textContent = st.error || bits.join(" · ");
+  $("failList").innerHTML = st.failed.map((f) => `<li class="fatal">Line ${f.line} (${esc(f.name)}) failed
+    <details><summary>Details</summary><pre>${esc(f.error)}</pre></details></li>`).join("");
+  $("openFolder").dataset.path = st.out_dir;
+}
+
+async function start() {
+  const res = await api.start($("note").value, $("outDir").value, $("precise").checked, $("redo").checked);
+  if (res.error) { $("status").textContent = res.error; return; }
+  $("setup").hidden = true; $("running").hidden = false; $("done").hidden = true;
+  $("barFill").style.width = "0";
+  pollTimer = setInterval(poll, 400);
+}
+
+async function init() {
+  api = window.pywebview.api;
+  const ok = await api.ffmpeg_ok();
+  if (!ok.ok) { $("ffmpegBanner").hidden = false; $("ffmpegBanner").textContent = "Video tools are missing: " + ok.error; }
+  $("note").addEventListener("input", refreshSoon);
+  $("title").addEventListener("input", () => { titleEdited = true; refreshSoon(); });
+  $("outDir").addEventListener("input", () => { outEdited = true; refreshSoon(); });
+  $("redo").addEventListener("change", refresh);
+  $("slots").addEventListener("click", async (e) => {
+    const p = e.target.closest("[data-pick]"), c = e.target.closest("[data-clear]");
+    if (p) await pick(Number(p.dataset.pick));
+    if (c) { await api.clear_videos(Number(c.dataset.clear)); delete slots[c.dataset.clear]; await refresh(); }
+  });
+  $("chooseOut").addEventListener("click", async () => {
+    const d = await api.choose_folder();
+    if (d) { $("outDir").value = d; outEdited = true; await refresh(); }
+  });
+  $("go").addEventListener("click", start);
+  $("cancel").addEventListener("click", () => { api.cancel(); $("progEta").textContent = "Stopping…"; });
+  $("openFolder").addEventListener("click", (e) => api.open_folder(e.target.dataset.path));
+  $("again").addEventListener("click", () => { $("done").hidden = true; $("setup").hidden = false; refresh(); });
+  await refresh();
+}
+
+if (window.pywebview && window.pywebview.api) init();
+else window.addEventListener("pywebviewready", init);
+</script>
+</body>
+</html>

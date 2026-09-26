@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GAA Clips</title>
+<meta name="description" content="Cut match clips from a coach's list of timings, right on your phone or laptop. Videos never leave your device.">
+<meta name="theme-color" content="#6e1423">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GAA Clips">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+  :root {
+    --maroon: #6e1423; --maroon-deep: #4f0d19; --maroon-soft: #f7ecee; --maroon-line: #e6cfd3;
+    --white: #ffffff; --page: #fbf8f8; --ink: #22161a; --muted: #6d5a5f; --line: #ebe1e3;
+    --bad: #c62828; --bad-soft: #fdecea; --warn: #8a5300; --warn-soft: #fff3dc;
+    --ok: #1f6f3f; --focus: #1d6fd6;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--page); color: var(--ink);
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .bar { background: var(--maroon); color: var(--white);
+    padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px 12px; }
+  .bar-inner { max-width: 1000px; margin: 0 auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .brand { font-weight: 800; font-size: 20px; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap;
+    display: flex; align-items: center; gap: 10px; }
+  .brand svg { flex: none; }
+  .bar input { flex: 1 1 220px; min-width: 0; font: 600 17px/1.2 inherit; padding: 9px 12px;
+    border-radius: 8px; border: 2px solid transparent; background: var(--white); color: var(--ink); }
+  main { max-width: 1000px; margin: 0 auto; padding-inline: 16px; padding-block: 16px 120px;
+    display: grid; gap: 14px; }
+  @media (min-width: 820px) {
+    main { grid-template-columns: 1fr 1fr; align-items: start; padding-bottom: 40px; }
+    .col { display: grid; gap: 14px; }
+  }
+  .col { display: grid; gap: 14px; min-width: 0; }
+  .card { background: var(--white); border: 1px solid var(--line); border-radius: 12px; padding: 16px; min-width: 0; }
+  h2 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--maroon);
+    margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  h2 .n { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+    background: var(--maroon); color: var(--white); font-size: 13px; letter-spacing: 0; }
+  h2 .right { margin-left: auto; }
+  .hint { color: var(--muted); font-size: 14px; margin: 0; }
+  textarea { width: 100%; min-height: 240px; resize: vertical; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--white); color: var(--ink);
+    font: 16px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  @media (min-width: 820px) { textarea { min-height: 360px; } }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  button, .btn { font: 600 15px/1 inherit; border-radius: 10px; border: 1.5px solid var(--maroon);
+    background: var(--white); color: var(--maroon); padding: 11px 14px; cursor: pointer; min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--maroon); color: var(--white); font-size: 18px; width: 100%; min-height: 54px; }
+  button.primary:active:not(:disabled) { background: var(--maroon-deep); }
+  button.small { min-height: 36px; padding: 7px 12px; font-size: 14px; }
+  button.link { border: none; background: none; color: var(--muted); text-decoration: underline; padding: 6px; min-height: 0; font-weight: 500; }
+  .summary { margin-top: 10px; font-size: 15px; }
+  .summary strong { color: var(--maroon); }
+  .problems { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+  .problems li { font-size: 14px; padding: 8px 10px; border-radius: 8px; }
+  .problems li.fatal { background: var(--bad-soft); color: var(--bad); }
+  .problems li.warn { background: var(--warn-soft); color: var(--warn); }
+  .slot { border: 1.5px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 8px; }
+  .slot + .slot { margin-top: 10px; }
+  .slot.done { border-color: var(--maroon); background: var(--maroon-soft); }
+  .slot-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .slot-head strong { font-size: 16px; }
+  .slot-actions { display: flex; gap: 4px; align-items: center; }
+  .file { font-size: 14px; word-break: break-word; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .err { color: var(--bad); font-size: 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip { background: var(--white); border: 1px solid var(--maroon-line); border-radius: 5px; padding: 1px 6px;
+    font-size: 12px; font-variant-numeric: tabular-nums; }
+  .slot:not(.done) .chip { background: var(--page); border-color: var(--line); }
+  .opt { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; margin-top: 4px; }
+  .opt input { width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--maroon); flex: none; }
+  .opt .hint { display: block; font-size: 13px; }
+  .dest { font-size: 14px; margin: 0 0 10px; }
+  .action { position: fixed; left: 0; right: 0; bottom: 0; background: var(--white);
+    border-top: 1px solid var(--line); padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px);
+    box-shadow: 0 -4px 16px rgba(79, 13, 25, .08); z-index: 5; }
+  .action-inner { max-width: 1000px; margin: 0 auto; display: grid; gap: 6px; }
+  @media (min-width: 820px) {
+    .action { position: static; background: none; border: none; box-shadow: none; padding: 0; }
+  }
+  .status { font-size: 14px; color: var(--muted); min-height: 1.3em; text-align: center; }
+  .bar-track { height: 12px; border-radius: 6px; background: var(--maroon-soft); overflow: hidden; }
+  .bar-track > div { height: 100%; width: 0; background: var(--maroon); transition: width .3s; }
+  @media (prefers-reduced-motion: reduce) { .bar-track > div { transition: none; } }
+  .prog-line { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; color: var(--muted);
+    font-variant-numeric: tabular-nums; }
+  .clips { list-style: none; margin: 0; padding: 0; display: grid; }
+  .clips li { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center;
+    padding: 10px 0; border-top: 1px solid var(--line); }
+  .clips li:first-child { border-top: none; }
+  .clips .name { font-size: 14px; font-variant-numeric: tabular-nums; word-break: break-all; }
+  .clips .acts { display: flex; gap: 6px; }
+  .clips .fail { color: var(--bad); font-size: 13px; grid-column: 1 / -1; }
+  .tray-head { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .tray-head .primary { width: auto; flex: 1 1 200px; font-size: 16px; min-height: 48px; }
+  video { width: 100%; border-radius: 8px; background: #000; margin-top: 10px; }
+  details pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: var(--page);
+    padding: 8px; border-radius: 6px; max-height: 180px; overflow: auto; }
+  .banner { background: var(--bad-soft); color: var(--bad); padding: 10px 12px; border-radius: 8px; font-size: 14px; }
+  .note { background: var(--maroon-soft); color: var(--maroon-deep); padding: 10px 12px; border-radius: 8px; font-size: 14px; }
+  [hidden] { display: none !important; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="bar-inner">
+    <div class="brand">
+      <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="16" cy="16" r="14" fill="#fff"/>
+        <path d="M6 10c4 3 4 9 0 12M26 10c-4 3-4 9 0 12" fill="none" stroke="#6e1423" stroke-width="2.4" stroke-linecap="round"/>
+      </svg>
+      GAA Clips
+    </div>
+    <label class="sr" for="title">Match name</label>
+    <input id="title" type="text" placeholder="Match, e.g. Dunloy v Loughgiel" autocomplete="off">
+  </div>
+</header>
+
+<main>
+  <div class="col">
+    <div class="banner" id="banner" hidden></div>
+    <section class="card" aria-labelledby="h-times">
+      <h2 id="h-times"><span class="n">1</span> Clip timings
+        <button class="small right" id="pasteBtn" type="button">Paste</button></h2>
+      <label class="sr" for="note">Clip timings</label>
+      <textarea id="note" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+      <div class="summary" id="summary"></div>
+      <ul class="problems" id="noteProblems"></ul>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="card" aria-labelledby="h-videos">
+      <h2 id="h-videos"><span class="n">2</span> Videos</h2>
+      <p class="hint" style="margin-bottom:10px">One for each half. If a half was recorded as several files, pick them all together.
+        Videos stay on this device; nothing is uploaded.</p>
+      <div id="slots"></div>
+      <input type="file" id="picker" accept="video/*,.mp4,.mov,.m4v,.mts" multiple hidden>
+    </section>
+
+    <section class="card" aria-labelledby="h-make">
+      <h2 id="h-make"><span class="n">3</span> Make clips</h2>
+      <p class="dest" id="dest"></p>
+      <label class="opt" id="folderOpt" hidden><input type="checkbox" id="useFolder">
+        <span>Save straight into a folder <span class="hint" id="folderHint">You'll choose the folder when you start.</span></span></label>
+      <label class="opt"><input type="checkbox" id="precise">
+        <span>Exact start times <span class="hint">Much slower. Normally a clip can start a second or two early.</span></span></label>
+      <ul class="problems" id="planProblems"></ul>
+    </section>
+
+    <section class="card" id="trayCard" aria-labelledby="h-tray" hidden>
+      <h2 id="h-tray">Your clips</h2>
+      <div class="tray-head">
+        <button class="primary" id="saveAll" type="button">Save all</button>
+        <button id="clearTray" type="button">Clear</button>
+      </div>
+      <p class="hint" id="trayHint"></p>
+      <ul class="clips" id="clipList"></ul>
+      <video id="player" controls playsinline hidden></video>
+    </section>
+  </div>
+</main>
+
+<div class="action">
+  <div class="action-inner">
+    <div id="running" hidden>
+      <div class="bar-track"><div id="barFill"></div></div>
+      <div class="prog-line"><span id="progText">Starting…</span><span id="progEta"></span></div>
+    </div>
+    <button class="primary" id="go" type="button" disabled>Make clips</button>
+    <div class="status" id="status" role="status"></div>
+  </div>
+</div>
+
+<script src="vendor/ffmpeg.js"></script>
+<script src="notes.js"></script>
+<script src="engine.js"></script>
+<script src="store.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
