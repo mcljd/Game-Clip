@@ -145,7 +145,9 @@ def parse_probe(path: str, data: dict) -> MediaInfo:
         fps=_fps(v.get("avg_frame_rate") or v.get("r_frame_rate")) if v else None,
         audio_codec=a.get("codec_name") if a else None,
         size_bytes=int(fmt.get("size") or 0),
-        fps_str=(v.get("avg_frame_rate") or v.get("r_frame_rate")) if v else None,
+        # The stated (nominal) rate, not the average: phones record variable
+        # frame rate, whose average is an odd fraction like 143640/4789.
+        fps_str=(v.get("r_frame_rate") or v.get("avg_frame_rate")) if v else None,
         pix_fmt=v.get("pix_fmt") if v else None,
         sample_rate=int(a["sample_rate"]) if a and a.get("sample_rate") else None,
         channels=a.get("channels") if a else None,
@@ -294,8 +296,26 @@ class Look:
         if max_height and h > max_height:
             w, h = round(w * max_height / h), max_height
         even = lambda n: max(2, int(n) // 2 * 2)
-        fps = info.fps_str if info.fps_str and info.fps_str != "0/0" else "25"
-        return cls(even(w), even(h), fps, preset)
+        return cls(even(w), even(h), standard_fps(info.fps_str or info.fps), preset)
+
+
+# Frame rates cameras actually use, as exact strings for ffmpeg.
+_STANDARD_FPS = {23.976: "24000/1001", 24.0: "24", 25.0: "25", 29.97: "30000/1001", 30.0: "30",
+                 48.0: "48", 50.0: "50", 59.94: "60000/1001", 60.0: "60"}
+
+
+def standard_fps(rate: str | float | None) -> str:
+    """Snap a probed rate to the nearest standard one (within 1.5%), so reels
+    come out at 25 or 29.97, never 115200000/4608001. Very high rates (slow
+    motion) are capped at 60; anything else unusual is rounded."""
+    value = _fps(rate) if isinstance(rate, str) else rate
+    if not value or value <= 0:
+        return "25"
+    value = min(value, 60.0)
+    nearest = min(_STANDARD_FPS, key=lambda r: abs(r - value))
+    if abs(nearest - value) / nearest <= 0.015:
+        return _STANDARD_FPS[nearest]
+    return str(round(value))
 
 
 def _encode_args(look: Look) -> list[str]:

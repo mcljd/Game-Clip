@@ -109,6 +109,23 @@
     padding: 8px; border-radius: 6px; max-height: 180px; overflow: auto; }
   .banner { background: var(--bad-soft); color: var(--bad); padding: 10px 12px; border-radius: 8px; font-size: 14px; }
   .note { background: var(--maroon-soft); color: var(--maroon-deep); padding: 10px 12px; border-radius: 8px; font-size: 14px; }
+  .textlist { display: grid; gap: 6px; }
+  @media (min-width: 820px) { .textlist { max-height: 480px; overflow: auto; } }
+  .trow { display: grid; grid-template-columns: 44px 96px 1fr; gap: 8px; align-items: center; font-size: 14px; }
+  .trow .half { color: var(--muted); font-size: 12px; }
+  .trow .time { font-variant-numeric: tabular-nums; }
+  .trow input { min-width: 0; font: 16px/1.2 inherit; padding: 8px 10px; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--white); color: var(--ink); }
+  .preview { display: block; width: 100%; max-width: 420px; aspect-ratio: 16 / 9; border-radius: 8px; margin: 0 0 10px; background: #000; }
+  .reels { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 4px; font-size: 14px; }
+  .reels li { display: flex; justify-content: space-between; gap: 8px; }
+  .reels .meta { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .reels li.whole { border-top: 1px solid var(--line); padding-top: 4px; }
+  .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .buttons button.primary { font-size: 17px; }
+  button.primary.alt { background: var(--white); color: var(--maroon); }
+  button.primary.alt:active:not(:disabled) { background: var(--maroon-soft); }
+  select { font: inherit; padding: 2px 4px; border-radius: 6px; border: 1px solid var(--line); background: var(--white); color: var(--ink); }
   [hidden] { display: none !important; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
@@ -139,6 +156,13 @@
       <div class="summary" id="summary"></div>
       <ul class="problems" id="noteProblems"></ul>
     </section>
+
+    <section class="card" id="textCard" aria-labelledby="h-text" hidden>
+      <h2 id="h-text">Text before each clip</h2>
+      <p class="hint" style="margin-bottom:8px">Shown on a black screen before the clip. Leave blank for no screen.</p>
+      <canvas id="preview" class="preview" width="640" height="360" aria-label="Preview of the text screen"></canvas>
+      <div class="textlist" id="textList"></div>
+    </section>
   </div>
 
   <div class="col">
@@ -151,17 +175,24 @@
     </section>
 
     <section class="card" aria-labelledby="h-make">
-      <h2 id="h-make"><span class="n">3</span> Make clips</h2>
+      <h2 id="h-make"><span class="n">3</span> Make the highlights</h2>
       <p class="dest" id="dest"></p>
+      <label class="opt"><input type="checkbox" id="cards" checked>
+        <span>Black text screen before clips with text, for
+          <select id="cardSecs" aria-label="Seconds"><option>2</option><option selected>3</option><option>4</option><option>5</option></select> seconds
+          <span class="hint" id="cardsHint"></span></span></label>
+      <label class="opt"><input type="checkbox" id="keepClips">
+        <span>Also keep each clip separately</span></label>
       <label class="opt" id="folderOpt" hidden><input type="checkbox" id="useFolder">
-        <span>Save straight into a folder <span class="hint" id="folderHint">You'll choose the folder when you start.</span></span></label>
-      <label class="opt"><input type="checkbox" id="precise">
+        <span>Save straight into a folder <span class="hint">You'll choose the folder when you start.</span></span></label>
+      <label class="opt" id="preciseWrap"><input type="checkbox" id="precise">
         <span>Exact start times <span class="hint">Much slower. Normally a clip can start a second or two early.</span></span></label>
+      <ul class="reels" id="reelList"></ul>
       <ul class="problems" id="planProblems"></ul>
     </section>
 
     <section class="card" id="trayCard" aria-labelledby="h-tray" hidden>
-      <h2 id="h-tray">Your clips</h2>
+      <h2 id="h-tray">Your videos</h2>
       <div class="tray-head">
         <button class="primary" id="saveAll" type="button">Save all</button>
         <button id="clearTray" type="button">Clear</button>
@@ -179,7 +210,11 @@
       <div class="bar-track"><div id="barFill"></div></div>
       <div class="prog-line"><span id="progText">Starting…</span><span id="progEta"></span></div>
     </div>
-    <button class="primary" id="go" type="button" disabled>Make clips</button>
+    <div class="buttons" id="goButtons">
+      <button class="primary" id="goHalves" type="button" disabled>Half reels</button>
+      <button class="primary alt" id="goWhole" type="button" disabled>One video</button>
+    </div>
+    <button class="primary" id="stop" type="button" hidden>Stop</button>
     <div class="status" id="status" role="status"></div>
   </div>
 </div>
@@ -188,6 +223,7 @@
 <script src="notes.js"></script>
 <script src="engine.js"></script>
 <script src="store.js"></script>
+<script src="cards.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

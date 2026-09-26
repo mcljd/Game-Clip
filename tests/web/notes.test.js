@@ -30,3 +30,24 @@ test("filenames match the Python app", () => {
   assert.equal(Notes.slugify("Seán Ó Dónaill!"), "sean_o_donaill");
   assert.equal(Notes.fmt(3723), "1:02:03");
 });
+
+test("setLabel writes the text into that line only", () => {
+  const note = "Dunloy clips\n1:52 - 2:10\n3:05–3:33 old text\n2nd Half Video\n3:04-3:37";
+  let t = Notes.setLabel(note, 2, "Point - Conor");
+  assert.equal(t.split("\n")[1], "1:52 - 2:10 Point - Conor");
+  t = Notes.setLabel(t, 3, "Goal");
+  assert.equal(t.split("\n")[2], "3:05–3:33 Goal");
+  t = Notes.setLabel(t, 3, "  ");
+  assert.equal(t.split("\n")[2], "3:05–3:33");
+  assert.equal(Notes.setLabel(t, 4, "x"), t);             // not a clip line
+  const n = Notes.parse(Notes.setLabel(note, 2, "Point - Conor"));
+  assert.equal(n.sections[0].clips[0].label, "Point - Conor");
+  assert.equal(Notes.setLabel("1:00-1:10\r\n2:00-2:10", 2, "a"), "1:00-1:10\r\n2:00-2:10 a");
+});
+
+test("standardFps matches the Python snapping", () => {
+  const { standardFps } = require("../../web/engine.js");
+  const cases = [["115200000/4608001", "25"], ["30000/1001", "30000/1001"], ["143640/4789", "30"], ["2997/100", "30000/1001"],
+    ["50", "50"], ["240", "60"], [null, "25"], ["12", "12"], ["59.94", "60000/1001"], ["29.97", "30000/1001"]];
+  for (const [rate, want] of cases) assert.equal(standardFps(rate), want, String(rate));
+});

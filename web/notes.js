@@ -135,7 +135,21 @@
     return parts.join("_") + ".mp4";
   }
 
-  const api = { parse, parseTime, fmt, fmtFilename, sectionTag, slugify, clipFilename, TimecodeError };
+  const LEAD_RE = new RegExp(String.raw`^(\s*${TIME}\s*(?:-+|–|—|to)\s*${TIME})`, "i");
+
+  /** Set the text shown before the clip on ``lineNo`` (1-based), keeping the
+   *  coach's own times and every other line exactly as typed. */
+  function setLabel(text, lineNo, label) {
+    const nl = text.includes("\r\n") ? "\r\n" : "\n";
+    const lines = text.split(/\r\n|\r|\n/);
+    const m = LEAD_RE.exec(lines[lineNo - 1] || "");
+    if (!m) return text;
+    const clean = String(label).replace(/[\r\n]+/g, " ").trim();
+    lines[lineNo - 1] = clean ? `${m[1]} ${clean}` : m[1];
+    return lines.join(nl);
+  }
+
+  const api = { parse, setLabel, parseTime, fmt, fmtFilename, sectionTag, slugify, clipFilename, TimecodeError };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Notes = api;
 })(typeof self !== "undefined" ? self : this);

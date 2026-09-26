@@ -49,7 +49,7 @@ def test_encode_commands_share_one_look():
 
 def test_look_caps_height_and_keeps_even_sizes():
     info = ffmpeg.MediaInfo("x", 1, "mp4", "h264", 1918, 1080, 50.0, "aac", 0, fps_str="50/1")
-    assert ffmpeg.Look.for_source(info, max_height=720) == ffmpeg.Look(1278, 720, "50/1")
+    assert ffmpeg.Look.for_source(info, max_height=720) == ffmpeg.Look(1278, 720, "50")
 
 
 @needs_ffmpeg
@@ -125,3 +125,11 @@ def test_keep_clips_too(videos, tmp_path):
     reels = reel.plan_reels(note, jobs, tmp_path, "T", halves=True)
     reel.run_reels(reels, keep_clips_dir=tmp_path / "clips")
     assert sorted(p.name for p in (tmp_path / "clips").iterdir()) == [j.out.name for j in jobs]
+
+
+@pytest.mark.parametrize("rate,expected", [
+    ("115200000/4608001", "25"), ("30000/1001", "30000/1001"), ("143640/4789", "30"), ("2997/100", "30000/1001"),
+    ("50/1", "50"), ("240/1", "60"), ("0/0", "25"), (None, "25"), ("12/1", "12"), (59.94, "60000/1001"),
+])
+def test_standard_fps(rate, expected):
+    assert ffmpeg.standard_fps(rate) == expected

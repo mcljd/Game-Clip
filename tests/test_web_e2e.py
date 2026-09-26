@@ -68,57 +68,93 @@ def pick(page, index, path):
 
 def wait_status(page, pattern):
     page.wait_for_function(
-        f"/{pattern}/.test(document.getElementById('status').textContent)", timeout=120_000)
+        f"/{pattern}/.test(document.getElementById('status').textContent)", timeout=180_000)
 
 
-def test_phone_flow_makes_valid_clips(phone, videos, tmp_path):
+def saved_video(page, index, tmp_path):
+    """Pull a finished video out of the page's storage and write it to disk."""
+    got = page.evaluate("""async (i) => {
+      const t = new ClipTray(); await t.init();
+      const rank = (x) => (x.kind === 'reel' ? 0 : 1);
+      const r = (await t.all()).filter((x) => x.kind !== 'piece')
+        .sort((a, b) => rank(a) - rank(b) || a.key.localeCompare(b.key))[i];
+      const b = new Uint8Array(await r.blob.arrayBuffer()); let s = '';
+      for (let k = 0; k < b.length; k += 0x8000) s += String.fromCharCode.apply(null, b.subarray(k, k + 0x8000));
+      return {name: r.name, b64: btoa(s)};
+    }""", index)
+    out = tmp_path / got["name"]
+    out.write_bytes(base64.b64decode(got["b64"]))
+    return out
+
+
+def decodes_cleanly(path):
+    import subprocess
+    r = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-f", "null", "-"],
+                       capture_output=True, text=True)
+    return r.stderr.strip() == ""
+
+
+def test_half_reels_with_text_screens_then_one_video(phone, videos, tmp_path):
     page = phone
+    page.fill("#title", "Test match")
     page.fill("#note", NOTE)
     page.wait_for_timeout(400)
     assert "1:75" in page.inner_text("#noteProblems")
     assert not page.is_visible("#folderOpt")  # laptop-only option
+    # Type a text screen for the first clip in the list; it's written into the note.
+    page.fill("[data-line='2']", "Point - Conor")
+    page.wait_for_timeout(400)
+    assert page.input_value("#note").splitlines()[1] == "0:10-0:16 Point - Conor"
     pick(page, 0, videos["h1"])
     pick(page, 1, videos["h2"])
-    page.wait_for_function("document.getElementById('go').textContent === 'Make 3 clips'")
+    page.wait_for_function("!document.getElementById('goHalves').disabled")
+    assert "2 of 3 clips have text" in page.inner_text("#cardsHint")
 
-    page.click("#go")
-    wait_status(page, "Done: 3 clips made")
+    page.click("#goHalves")
+    wait_status(page, "Done: 2 videos made")
+    names = page.locator("#clipList .name").all_inner_texts()
+    assert names == ["Test match - 1st Half.mp4", "Test match - 2nd half.mp4"]
+    first = saved_video(page, 0, tmp_path)
+    info = ffmpeg.probe(first)
+    assert (info.video_codec, info.audio_codec) == ("h264", "aac")
+    # Re-made, so exact: 6s + 9s clips, plus two 3s text screens
+    assert abs(info.duration - (6 + 9 + 3 + 3)) < 0.5
+    assert decodes_cleanly(first)
+
+    page.click("#goWhole")
+    wait_status(page, "Done: 1 video made")
     assert page.locator("#clipList li").count() == 3
-    assert page.inner_text("#go") == "All clips made"
-
-    clip = page.evaluate("""async () => {
-      const t = new ClipTray(); await t.init(); const r = (await t.all())[1];
-      const b = new Uint8Array(await r.blob.arrayBuffer()); let s = '';
-      for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
-      return {name: r.name, b64: btoa(s)};
-    }""")
-    assert clip["name"] == "02_h1_00m31-00m40_goal.mp4"
-    out = tmp_path / clip["name"]
-    out.write_bytes(base64.b64decode(clip["b64"]))
-    info = ffmpeg.probe(out)
-    assert info.video_codec == "h264" and info.audio_codec == "aac"
-    assert 9 - 0.2 <= info.duration <= 9 + 2.2
-
-    # Clips survive a reload and aren't made again.
-    page.reload()
-    page.wait_for_function("document.querySelectorAll('#clipList li').length === 3")
+    # Parts are tidied away once everything worked.
+    assert page.evaluate("async () => { const t = new ClipTray(); await t.init(); return (await t.all()).filter(x => x.kind === 'piece').length; }") == 0
 
 
-def test_stop_mid_clip_then_restart(phone, videos):
+def test_copy_mode_without_text_screens(phone, videos, tmp_path):
     page = phone
-    page.fill("#note", "0:00-0:55\n")
+    page.fill("#note", "Test match\n0:10-0:16\n0:31-0:40\n")
     pick(page, 0, videos["h1"])
-    page.check("#precise")
+    page.uncheck("#cards")
+    page.check("#keepClips")
     page.wait_for_timeout(400)
-    page.click("#go")
-    page.wait_for_selector("#running:not([hidden])")
-    page.wait_for_timeout(1500)
-    page.click("#go")  # Stop
-    wait_status(page, "Stopped. 0 clips made")
-    assert page.locator("#clipList li").count() == 0
+    page.click("#goHalves")
+    wait_status(page, "Done: 1 video made")
+    assert page.locator("#clipList li").count() == 3   # the reel + 2 kept clips
+    reel = saved_video(page, 0, tmp_path)
+    assert reel.name == "Test match - 1st Half.mp4"
+    assert 15 - 0.3 <= ffmpeg.probe(reel).duration <= 15 + 4.5  # keyframe starts
+    assert decodes_cleanly(reel)
 
-    page.uncheck("#precise")
+
+def test_stop_then_carry_on(phone, videos):
+    page = phone
+    page.fill("#note", "0:00-0:55 Long one\n")
+    pick(page, 0, videos["h1"])
     page.wait_for_timeout(400)
-    page.click("#go")
-    wait_status(page, "Done: 1 clip made")
+    page.click("#goHalves")
+    page.wait_for_selector("#running:not([hidden])")
+    page.wait_for_timeout(2500)
+    page.click("#stop")
+    wait_status(page, "Stopped")
+    assert page.locator("#clipList li").count() == 0
+    page.click("#goHalves")
+    wait_status(page, "Done: 1 video made")
     assert page.locator("#clipList li").count() == 1

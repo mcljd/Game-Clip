@@ -15,14 +15,25 @@ Dunloy clips
 5:55-6:30
 ```
 
-and gets one file per clip, numbered in match order:
+and gets highlight reels:
 
 ```
-01_h1_01m52-02m10.mp4
-02_h1_03m05-03m33_point_from_play.mp4
-...
-12_h2_03m04-03m37.mp4
+Dunloy - 1st Half.mp4        (Make half reels)
+Dunloy - 2nd Half Video.mp4
+Dunloy - Whole match.mp4     (Make one video)
 ```
+
+**Text screens:** text after a clip's time (or typed into the *Text before
+each clip* list) is shown on a black screen with white text before that
+clip, e.g. `3:05-3:33 Point from play - Conor`. Clips without text have no
+screen. Tick *Also keep each clip separately* to get the single clips too.
+
+**How long it takes:** without text screens, reels are made by copying the
+video (seconds, no quality loss). Text screens mean the reel is re-made
+(encoded): on a laptop about a quarter of the reel's length (a 5-minute reel
+in about a minute and a half); in a phone's browser about real time or
+slower, so a 5-minute half can take 5-10 minutes. Phone reels are made at
+720p to keep that bearable.
 
 ## For coaches: the GAA Clips app (Windows)
 
@@ -35,11 +46,13 @@ and gets one file per clip, numbered in match order:
    in your note). If a half was recorded as several files, select them all
    at once and they're joined in order. Videos aren't copied or uploaded, so
    big files are fine, straight off an SD card or USB drive.
-4. **Make clips.** They're saved in a "*Match name* clips" folder next to the
-   videos. Press **Open folder** when it's done.
+4. **Make half reels** or **Make one video.** They're saved in a
+   "*Match name* highlights" folder next to the videos. Press **Open folder**
+   when it's done.
 
-Running it again skips clips that already exist, so if you stop part-way (or
-add more timings later), just press *Make clips* again.
+Pressing a Make button again rebuilds the videos (so changed text or timings
+are picked up). If you press Stop, the parts already made are kept and the
+next Make carries on from there.
 
 If the window won't open on an older PC, install Microsoft's free
 [Edge WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703).
@@ -53,10 +66,10 @@ with nothing to install. It lives in `web/` and is published to GitHub Pages.
   reads only the parts of the video it needs, so a 4 GB+ half is fine.
   (Tested: a clip cut from past the 4 GB mark of a 4.3 GB file in under 3 s.)
 - **Paste** the timings (the Paste button reads the clipboard), choose a
-  video per half, tap **Make clips**.
-- Clips are kept on the phone until you tap **Save all to Photos or Files**
-  (the iPhone share sheet) or save them one at a time. They survive the page
-  reloading, and Make clips carries on where it stopped.
+  video per half, tap **Half reels** or **One video**.
+- Videos are kept on the phone until you tap **Save to Photos or Files**
+  (the iPhone share sheet). They survive the page reloading, and after Stop
+  the next Make carries on where it stopped.
 - On iPhone, tap *Share → Add to Home Screen* to get an app icon.
 - Keep the screen open while clips are made: iPhone pauses pages in the
   background. The page asks the phone not to sleep.
@@ -129,6 +142,9 @@ hclip cut dunloy.txt --half GX010123.MP4 GX020123.MP4 --half GX010124.MP4
 # Frame-accurate (slow)
 hclip cut dunloy.txt --half h1.mp4 --half h2.mp4 --precise
 
+# Reels: one per half, or --whole for one video (text screens are app-only)
+hclip reel dunloy.txt --half h1.mp4 --half h2.mp4 --title "Dunloy" --out highlights
+
 # Duration, codecs, keyframe spacing
 hclip info "Dunloy 1st half.mp4"
 ```
@@ -178,6 +194,7 @@ hclip/
   timecode.py   1:52 / 1:02:03 / 1.52 <-> seconds
   ffmpeg.py     the only module that runs ffmpeg/ffprobe (pure command builders + runner)
   cut.py        match sections to videos, check ranges, cut resumably with progress
+  reel.py       half / whole-match reels, text screens, copy-or-encode choice
   naming.py     Windows-safe filenames
   cli.py        command line
   app/api.py    what the window can ask Python to do (tested without a window)
@@ -188,6 +205,7 @@ web/
   index.html    the phone/browser page
   notes.js      note parser (twin of notes.py)
   engine.js     ffmpeg.wasm cutting (same command as ffmpeg.py)
-  store.js      keeps finished clips on the device (IndexedDB)
+  store.js      keeps finished videos (and parts) on the device (IndexedDB)
+  cards.js      draws the black text screens
   app.js        page logic
 ```
