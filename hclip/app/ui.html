@@ -257,8 +257,8 @@ function sectionsForSlots() {
 
 function renderProblems(el, problems) {
   el.innerHTML = problems
-    .slice().sort((a, b) => a.line - b.line)
-    .map((p) => `<li class="${p.fatal ? "fatal" : "warn"}">Line ${p.line}: ${esc(p.message)}</li>`)
+    .slice().sort((a, b) => (a.line || 0) - (b.line || 0))
+    .map((p) => `<li class="${p.fatal ? "fatal" : "warn"}">${p.line ? `Line ${p.line}: ` : ""}${esc(p.message)}</li>`)
     .join("");
 }
 

@@ -44,7 +44,9 @@ slower, so a 5-minute half can take 5-10 minutes. Phone reels are made at
    straight away; typos are shown in red with the line number.
 3. **Choose the videos:** one per half (box 2 shows a slot for every half
    in your note). If a half was recorded as several files, select them all
-   at once and they're joined in order. Videos aren't copied or uploaded, so
+   at once and they're joined in order. Don't select both halves' videos
+   together: each box takes only that half's video. The app warns if the
+   same video is chosen for two boxes. Videos aren't copied or uploaded, so
    big files are fine, straight off an SD card or USB drive.
 4. **Make half reels** or **Make one video.** They're saved in a
    "*Match name* highlights" folder next to the videos. Press **Open folder**

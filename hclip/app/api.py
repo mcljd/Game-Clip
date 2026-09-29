@@ -171,7 +171,7 @@ class Api:
             result["message"] = "Choose the video for: " + ", ".join(missing)
             return result
         note, p = self._plan(text, out_dir)
-        result["problems"] = [_problem(x) for x in p.problems]
+        result["problems"] = self._shared_video_warnings(note) + [_problem(x) for x in p.problems]
         result["clips"] = len(p.jobs)
         if not p.jobs:
             result["message"] = "None of the clips fit inside the videos."
@@ -193,6 +193,24 @@ class Api:
             return result
         result["ready"] = True
         return result
+
+    def _shared_video_warnings(self, note: notes.Note) -> list[dict]:
+        """The same file chosen for two sections is almost always a mistake
+        (e.g. both halves' files picked together in every slot): each
+        section's timings count from the start of its own video."""
+        users: dict[Path, list[str]] = {}
+        for i, s in enumerate(note.sections):
+            slot = self._slots.get(i)
+            for f in slot.half.files if slot else []:
+                users.setdefault(Path(f).resolve(), []).append(s.name)
+        warnings = []
+        for f, names in users.items():
+            if len(names) > 1:
+                warnings.append({"line": None, "fatal": False, "message": (
+                    f"“{f.name}” is chosen for {' and '.join(names)}. Each part of the "
+                    f"note is timed from the start of its own video, so each usually "
+                    f"needs a different video. Press Change… to fix it.")})
+        return warnings
 
     # ----------------------------------------------------------------- run
 

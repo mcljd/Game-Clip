@@ -183,16 +183,22 @@ def run_reels(
         if look is not None:
             key = _sig("enc", str(j.half.files), j.start, j.end, look)
             path = work / f"clip_{key}.mp4"
+            if key in pieces:
+                return pieces[key]
+            src, src_start, joined = j.half.clip_source(j.start, j.end)
             cmd = ffmpeg.build_encode_clip_cmd(
-                ff, j.half.source(), j.start, j.duration, path, look,
-                is_concat=j.half.is_concat,
+                ff, src, src_start, j.duration, path, look,
+                is_concat=joined,
                 has_audio=bool(j.half.info and j.half.info.audio_codec))
         else:
             key = _sig("copy", str(j.half.files), j.start, j.end, precise)
             path = work / f"clip_{key}.mp4"
+            if key in pieces:
+                return pieces[key]
+            src, src_start, joined = j.half.clip_source(j.start, j.end)
             cmd = ffmpeg.build_cut_cmd(
-                ff, j.half.source(), j.start, j.duration, path, precise=precise,
-                reencode_audio=j.half.reencode_audio, is_concat=j.half.is_concat,
+                ff, src, src_start, j.duration, path, precise=precise,
+                reencode_audio=j.half.reencode_audio, is_concat=joined,
                 hevc=j.half.hevc)
         return pieces.setdefault(key, _Piece(path, cmd, j.duration, "clip", j))
 

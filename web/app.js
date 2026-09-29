@@ -107,8 +107,23 @@
   // -------------------------------------------------------------- render
 
   function renderProblems(el, list) {
-    el.innerHTML = list.slice().sort((a, b) => a.line - b.line)
-      .map((p) => `<li class="${p.fatal ? "fatal" : "warn"}">Line ${p.line}: ${esc(p.message)}</li>`).join("");
+    el.innerHTML = list.slice().sort((a, b) => (a.line || 0) - (b.line || 0))
+      .map((p) => `<li class="${p.fatal ? "fatal" : "warn"}">${p.line ? `Line ${p.line}: ` : ""}${esc(p.message)}</li>`).join("");
+  }
+
+  // The same video chosen for two sections is almost always a mistake (e.g.
+  // both halves' files picked together in every slot): each section's timings
+  // count from the start of its own video. Same rule as the Windows app.
+  function sharedVideoWarnings() {
+    const users = new Map();
+    note.sections.forEach((s, i) => {
+      for (const f of (slots[i] && slots[i].files) || []) users.set(f, [...(users.get(f) || []), s.name]);
+    });
+    return [...users].filter(([, names]) => names.length > 1).map(([f, names]) => ({
+      line: null, fatal: false,
+      message: `“${f}” is chosen for ${names.join(" and ")}. Each part of the note is timed from ` +
+        "the start of its own video, so each usually needs a different video. Tap Change to fix it.",
+    }));
   }
 
   function renderNote() {
@@ -171,6 +186,7 @@
     const p = plan();
     const noteKeys = new Set(note.problems.map((x) => `${x.line}|${x.message}`));
     renderProblems($("planProblems"), [
+      ...sharedVideoWarnings(),
       ...p.problems.filter((x) => !noteKeys.has(`${x.line}|${x.message}`)),
       ...lastFailures.map((f) => ({ line: f.line, fatal: true, message: f.message })),
     ]);

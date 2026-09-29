@@ -30,12 +30,36 @@ def test_precise_reencodes():
     assert "-avoid_negative_ts" not in cmd
 
 
-def test_concat_input():
+def test_single_file_seeks_before_input():
+    cmd = ffmpeg.build_cut_cmd("ffmpeg", "in.mp4", 90, 5, "o")
+    assert cmd.index("-ss") < cmd.index("-i")   # input seek: near-instant on huge files
+
+
+def test_concat_input_starts_at_inpoint_not_ss():
+    # -ss can't seek in a joined input: it would copy everything from the
+    # start of the half. The list itself starts at the clip (inpoint).
     cmd = ffmpeg.build_cut_cmd("ffmpeg", "list.ffconcat", 0, 5, "o", is_concat=True)
     i = cmd.index("-i")
     assert cmd[i - 4:i + 2] == ["-f", "concat", "-safe", "0", "-i", "list.ffconcat"]
-    # seek must come before the input for speed
-    assert cmd.index("-ss") < cmd.index("-f")
+    assert "-ss" not in cmd
+
+
+def test_concat_reencode_trims_lead_in():
+    cmd = ffmpeg.build_cut_cmd("ffmpeg", "l.ffconcat", 0, 5, "o", is_concat=True, precise=True)
+    assert "-copyts" in cmd and "trim=start=0:duration=5.000" in cmd[cmd.index("-vf") + 1]
+    look = ffmpeg.Look(1280, 720)
+    enc = ffmpeg.build_encode_clip_cmd("ffmpeg", "l.ffconcat", 0, 5, "o", look, is_concat=True)
+    assert "-copyts" in enc and "-ss" not in enc
+    assert enc[enc.index("-vf") + 1].startswith("trim=start=0")
+    assert enc[enc.index("-af") + 1].startswith("atrim=start=0")
+
+
+def test_concat_list_inpoint(tmp_path):
+    text = ffmpeg.write_concat_list([tmp_path / "a.mp4", tmp_path / "b.mp4"],
+                                    tmp_path / "l.txt", inpoint=95.5).read_text()
+    lines = text.splitlines()
+    assert lines[1].endswith("a.mp4'") and lines[2] == "inpoint 95.500"
+    assert not any(line.startswith("inpoint") for line in lines[3:])
 
 
 def test_gopro_chapter_order():

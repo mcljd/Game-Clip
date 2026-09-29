@@ -29,11 +29,46 @@
     });
   }
 
+  // A clip that ends this little past the end of one file still counts as inside it.
+  const PART_SLACK = 0.1;
+
+  /** Which of a half's files a clip is read from (same rule as the Python
+   *  HalfVideo.clip_source): {first, last, localStart}. first === last means
+   *  one file, read with a fast -ss seek; otherwise a joined list starting at
+   *  the clip (inpoint), because -ss can't seek in a joined input and would
+   *  copy everything from the start of the half. */
+  function clipSource(durations, start, end) {
+    let offset = 0;
+    for (let i = 0; i < durations.length; i++) {
+      const d = durations[i], lastFile = i === durations.length - 1;
+      if (start < offset + d || lastFile) {
+        const localStart = Math.max(0, start - offset);
+        let last = i, covered = offset + d;
+        if (!(end <= covered + PART_SLACK)) {
+          while (last < durations.length - 1 && end > covered) covered += durations[++last];
+        }
+        return { first: i, last, localStart };
+      }
+      offset += d;
+    }
+    return { first: 0, last: 0, localStart: start };
+  }
+
+  // Input options that start reading at `start`. A joined input already starts
+  // at the clip (inpoint); when re-encoding, -copyts keeps its keyframe lead-in
+  // at negative times so preRollTrim can drop it.
+  const seekArgs = (start, isConcat, reencode) =>
+    isConcat ? (reencode ? ["-copyts"] : []) : ["-ss", start.toFixed(3)];
+  const preRollTrim = (duration) => [
+    `trim=start=0:duration=${duration.toFixed(3)},setpts=PTS-STARTPTS`,
+    `atrim=start=0:duration=${duration.toFixed(3)},asetpts=PTS-STARTPTS`];
+
   function buildCutArgs(input, start, duration, out, opts = {}) {
-    const args = ["-hide_banner", "-nostdin", "-y", "-ss", start.toFixed(3)];
+    const args = ["-hide_banner", "-nostdin", "-y", ...seekArgs(start, opts.isConcat, opts.precise)];
     if (opts.isConcat) args.push("-f", "concat", "-safe", "0");
     args.push("-i", input, "-t", duration.toFixed(3), "-map", "0:v:0", "-map", "0:a:0?");
     if (opts.precise) {
+      if (opts.isConcat) { const [vf, af] = preRollTrim(duration); args.push("-vf", vf, "-af", af); }
       args.push("-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k");
     } else {
@@ -113,12 +148,18 @@
   const SILENCE = ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"];
 
   function buildEncodeClipArgs(input, start, duration, out, look, { isConcat = false, hasAudio = true } = {}) {
-    const args = ["-hide_banner", "-nostdin", "-y", "-ss", start.toFixed(3)];
+    const args = ["-hide_banner", "-nostdin", "-y", ...seekArgs(start, isConcat, true)];
     if (isConcat) args.push("-f", "concat", "-safe", "0");
     args.push("-i", input);
     if (!hasAudio) args.push(...SILENCE);
+    let vf = fitFilter(look);
+    if (isConcat) {
+      const [trimV, trimA] = preRollTrim(duration);
+      vf = `${trimV},${vf}`;
+      if (hasAudio) args.push("-af", trimA);
+    }
     args.push("-t", duration.toFixed(3), "-map", "0:v:0", "-map", hasAudio ? "0:a:0" : "1:a:0",
-      "-vf", fitFilter(look), ...encodeArgs(look), "-f", "mp4", out);
+      "-vf", vf, ...encodeArgs(look), "-f", "mp4", out);
     return args;
   }
 
@@ -168,14 +209,25 @@
       h.dir = `/v${++this.mountCounter}`;
       await this.ff.createDir(h.dir);
       await this.ff.mount("WORKERFS", { files: h.files }, h.dir);
-      if (h.files.length > 1) {
-        const list = ["ffconcat version 1.0",
-          ...h.files.map((f) => `file '${h.dir}/${f.name.replace(/'/g, "'\\''")}'`)].join("\n");
-        h.input = `${h.dir}.ffconcat`;
-        await this.ff.writeFile(h.input, new TextEncoder().encode(list + "\n"));
-      } else {
-        h.input = `${h.dir}/${h.files[0].name}`;
-      }
+      h.input = `${h.dir}/${h.files[0].name}`;
+    }
+
+    /** Where to read one clip from: {input, start, isConcat, list}. A joined
+     *  list (only for a clip running across two files) must be deleted after. */
+    async _clipSource(h, start, duration) {
+      const { first, last, localStart } = clipSource(h.durations, start, start + duration);
+      const path = (f) => `${h.dir}/${f.name}`;
+      if (first === last) return { input: path(h.files[first]), start: localStart, isConcat: false };
+      const q = (f) => `file '${path(f).replace(/'/g, "'\\''")}'`;
+      const files = h.files.slice(first, last + 1);
+      const lines = ["ffconcat version 1.0", q(files[0]), `inpoint ${localStart.toFixed(3)}`, ...files.slice(1).map(q)];
+      const list = `${h.dir}.clip.ffconcat`;
+      await this.ff.writeFile(list, new TextEncoder().encode(lines.join("\n") + "\n"));
+      return { input: list, start: 0, isConcat: true, list };
+    }
+
+    async _dropList(src) {
+      if (src.list) { try { await this.ff.deleteFile(src.list); } catch (_) { /* gone */ } }
     }
 
     async _logOf(args) {
@@ -192,6 +244,7 @@
       const names = new Set(files.map((f) => f.name));
       if (names.size !== files.length) throw new Error("Two of those files have the same name.");
       let duration = 0, video = null, audio = null, reencodeAudio = false, first = null;
+      const durations = [];
       for (const f of files) {
         const tmp = { files: [f] };
         await this._mount(tmp);
@@ -199,13 +252,14 @@
         await this.ff.unmount(tmp.dir);
         if (!info.duration || !info.video) throw new Error(`“${f.name}” doesn't look like a video this can read.`);
         duration += info.duration;
+        durations.push(info.duration);
         first = first || info;
         video = video || info.video;
         audio = audio || info.audio;
         if (info.audio && !MP4_OK_AUDIO.has(info.audio)) reencodeAudio = true;
       }
       await this.clearHalf(index);
-      const h = { files, duration, video, audio, reencodeAudio, hevc: video === "hevc", info: first };
+      const h = { files, duration, durations, video, audio, reencodeAudio, hevc: video === "hevc", info: first };
       await this._mount(h);
       this.halves.set(index, h);
       return {
@@ -227,8 +281,9 @@
       await this.ready();
       const h = this.halves.get(index);
       const out = "/out.mp4";
-      const args = buildCutArgs(h.input, start, duration, out, {
-        precise, isConcat: h.files.length > 1, hevc: h.hevc, reencodeAudio: h.reencodeAudio,
+      const src = await this._clipSource(h, start, duration);
+      const args = buildCutArgs(src.input, src.start, duration, out, {
+        precise, isConcat: src.isConcat, hevc: h.hevc, reencodeAudio: h.reencodeAudio,
       });
       const log = [];
       this.logSink = (m) => {
@@ -238,7 +293,7 @@
         if (t && onProgress) onProgress(+t[1] * 3600 + +t[2] * 60 + +t[3]);
       };
       let code;
-      try { code = await this.ff.exec(args); } finally { this.logSink = null; }
+      try { code = await this.ff.exec(args); } finally { this.logSink = null; await this._dropList(src); }
       if (code !== 0) {
         try { await this.ff.deleteFile(out); } catch (_) { /* nothing written */ }
         const err = new Error("The video tools couldn't make this clip.");
@@ -275,9 +330,10 @@
     async encodeClip(index, start, duration, look, { onProgress } = {}) {
       await this.ready();
       const h = this.halves.get(index);
-      const args = buildEncodeClipArgs(h.input, start, duration, "/piece.mp4", look,
-        { isConcat: h.files.length > 1, hasAudio: !!h.audio });
-      return this._run(args, "/piece.mp4", onProgress);
+      const src = await this._clipSource(h, start, duration);
+      const args = buildEncodeClipArgs(src.input, src.start, duration, "/piece.mp4", look,
+        { isConcat: src.isConcat, hasAudio: !!h.audio });
+      try { return await this._run(args, "/piece.mp4", onProgress); } finally { await this._dropList(src); }
     }
 
     /** A text screen: ``png`` (Blob) held for ``seconds``. */
@@ -317,7 +373,7 @@
   }
 
   const api = { Engine, buildCutArgs, buildEncodeClipArgs, buildCardArgs, buildJoinArgs,
-    parseProbeLog, sortParts, joinKey, lookFor, standardFps };
+    parseProbeLog, sortParts, joinKey, lookFor, standardFps, clipSource };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.ClipEngine = api;
 })(typeof self !== "undefined" ? self : this);

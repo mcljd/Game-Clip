@@ -224,20 +224,25 @@ def sort_parts(paths: Sequence[str | Path]) -> list[Path]:
     return sorted((Path(p) for p in paths), key=key)
 
 
-def write_concat_list(paths: Sequence[str | Path], dest: Path) -> Path:
-    """Write an ffmpeg concat-demuxer list. Quotes are escaped per ffmpeg rules."""
+def write_concat_list(paths: Sequence[str | Path], dest: Path,
+                      inpoint: float | None = None) -> Path:
+    """Write an ffmpeg concat-demuxer list. Quotes are escaped per ffmpeg rules.
+    ``inpoint`` starts the first file part-way in (the demuxer seeks there;
+    ``-ss`` on a joined input can't seek and reads from the very start)."""
     lines = ["ffconcat version 1.0"]
-    for p in paths:
+    for n, p in enumerate(paths):
         escaped = str(Path(p).resolve()).replace("\\", "/").replace("'", r"'\''")
         lines.append(f"file '{escaped}'")
+        if n == 0 and inpoint:
+            lines.append(f"inpoint {inpoint:.3f}")
     dest.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return dest
 
 
-def concat_list_tempfile(paths: Sequence[str | Path]) -> Path:
+def concat_list_tempfile(paths: Sequence[str | Path], inpoint: float | None = None) -> Path:
     fd, name = tempfile.mkstemp(prefix="hclip_", suffix=".ffconcat")
     os.close(fd)
-    return write_concat_list(paths, Path(name))
+    return write_concat_list(paths, Path(name), inpoint)
 
 
 # --------------------------------------------------------------------------
@@ -248,6 +253,26 @@ def input_args(source: str | Path, is_concat: bool) -> list[str]:
     if is_concat:
         return ["-f", "concat", "-safe", "0", "-i", str(source)]
     return ["-i", str(source)]
+
+
+def seek_args(start: float, is_concat: bool, reencode: bool) -> list[str]:
+    """Input options that start reading at ``start``.
+
+    A joined input (``is_concat``) is a list that already starts at the clip
+    (see ``HalfVideo.clip_source``): ``-ss`` can't seek in it and would copy
+    everything from the start of the video. When re-encoding, ``-copyts``
+    keeps the lead-in before the inpoint at negative times so
+    ``_preroll_trim`` can drop it."""
+    if is_concat:
+        return ["-copyts"] if reencode else []
+    return ["-ss", f"{start:.3f}"]
+
+
+def _preroll_trim(duration: float) -> tuple[str, str]:
+    """Filters that drop frames before the clip's first frame (negative
+    timestamps under -copyts) and restart the clock at zero."""
+    return (f"trim=start=0:duration={duration:.3f},setpts=PTS-STARTPTS",
+            f"atrim=start=0:duration={duration:.3f},asetpts=PTS-STARTPTS")
 
 
 def build_cut_cmd(
@@ -267,7 +292,7 @@ def build_cut_cmd(
     ``start``; with ``precise`` the video is re-encoded and frame-accurate."""
     cmd = [
         ffmpeg, "-hide_banner", "-nostdin", "-y",
-        "-ss", f"{start:.3f}",
+        *seek_args(start, is_concat, reencode=precise),
         *input_args(source, is_concat),
         "-t", f"{duration:.3f}",
         # Only first video + first audio: GoPro telemetry/timecode data
@@ -275,6 +300,9 @@ def build_cut_cmd(
         "-map", "0:v:0", "-map", "0:a:0?",
     ]
     if precise:
+        if is_concat:
+            vf, af = _preroll_trim(duration)
+            cmd += ["-vf", vf, "-af", af]
         cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
                 "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k"]
     else:
@@ -359,12 +387,18 @@ def build_encode_clip_cmd(
 ) -> list[str]:
     """One clip re-encoded to ``look`` (frame-accurate, since it's decoded)."""
     cmd = [ffmpeg, "-hide_banner", "-nostdin", "-y",
-           "-ss", f"{start:.3f}", *input_args(source, is_concat)]
+           *seek_args(start, is_concat, reencode=True), *input_args(source, is_concat)]
     if not has_audio:
         cmd += _SILENCE
+    vf = _fit_filter(look)
+    if is_concat:
+        trim_v, trim_a = _preroll_trim(duration)
+        vf = f"{trim_v},{vf}"
+        if has_audio:
+            cmd += ["-af", trim_a]
     cmd += ["-t", f"{duration:.3f}", "-map", "0:v:0",
             "-map", "0:a:0" if has_audio else "1:a:0",
-            "-vf", _fit_filter(look), *_encode_args(look),
+            "-vf", vf, *_encode_args(look),
             "-progress", "pipe:1", "-nostats", "-f", "mp4", str(out)]
     return cmd
 

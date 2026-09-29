@@ -72,7 +72,55 @@ def test_gopro_chapters_joined_without_intermediate_file(videos, tmp_path):
     [r] = cut.run(p.jobs)
     half.close()
     assert r.status == "made"
-    assert ffmpeg.probe(r.job.out).duration >= 5.5
+    # At most one keyframe gap (2 s) early, never the whole half before it.
+    assert 5.5 <= ffmpeg.probe(r.job.out).duration <= 6 + 2.1
+
+
+def test_joined_half_clip_is_its_own_length_not_the_half_so_far(videos, tmp_path):
+    # Regression: -ss can't seek in a joined input, so each clip used to
+    # carry all the footage from the start of the half (a 3-minute reel of
+    # a two-file half came out at 15 GB).
+    half = cut.HalfVideo.open([videos["h1"], videos["part1"]])   # 60 s + 20 s
+    p = cut.plan(notes.parse("1:10-1:15\n0:40-0:45"), [half], tmp_path)
+    results = cut.run(p.jobs)
+    half.close()
+    for r in results:
+        assert r.status == "made", r.error
+        assert ffmpeg.probe(r.job.out).duration <= 5 + 2.1
+    small = videos["h1"].stat().st_size * 7 / 60        # 5 s + one keyframe gap
+    assert all(r.job.out.stat().st_size < small for r in results)
+
+
+def test_clip_source_picks_the_file_holding_the_clip(tmp_path):
+    a, b, c = tmp_path / "a.mp4", tmp_path / "b.mp4", tmp_path / "c.mp4"
+    half = cut.HalfVideo(files=[a, b, c], duration=300, reencode_audio=False,
+                         durations=[100, 100, 100])
+    assert half.clip_source(10, 20) == (a, 10, False)
+    assert half.clip_source(150, 160) == (b, 50, False)
+    assert half.clip_source(100, 110) == (b, 0, False)          # exactly on the join
+    assert half.clip_source(190, 200.05) == (b, 90, False)      # rounding slack
+    listing, start, joined = half.clip_source(195, 210)         # spans b -> c
+    assert (start, joined) == (0.0, True)
+    text = listing.read_text()
+    assert "b.mp4" in text and "c.mp4" in text and "a.mp4" not in text
+    assert "inpoint 95.000" in text
+    listing, _, _ = half.clip_source(95, 250)                   # spans a -> b -> c
+    assert all(f"{n}.mp4" in listing.read_text() for n in "abc")
+    half.close()
+    assert not listing.exists()
+
+
+def test_joined_half_encoded_clip_starts_exactly(videos, tmp_path):
+    from hclip import reel
+    half = cut.HalfVideo.open([videos["part1"], videos["part2"]])  # 20 s + 20 s
+    p = cut.plan(notes.parse("0:17-0:23"), [half], tmp_path)       # spans the join
+    [r] = reel.run_reels(reel.plan_reels(notes.parse("0:17-0:23"), p.jobs, tmp_path, "T"),
+                         card_images={}, force=True, preset="ultrafast")
+    half.close()
+    assert r.status == "made", r.error
+    # Joined files mean an encoded reel (the halves' pieces can be copied too,
+    # but the encode path must also be exact).
+    assert abs(ffmpeg.probe(r.reel.out).duration - 6) < 0.15
 
 
 def test_pcm_camcorder_audio(videos, tmp_path):

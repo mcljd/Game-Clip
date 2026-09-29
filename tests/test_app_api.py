@@ -118,3 +118,19 @@ def test_double_click_starts_only_one_run(videos, tmp_path):
     api.wait(60)
     assert sorted("ok" in r for r in out) == [False, True]
     assert [r["status"] for r in api.status()["reels"]] == ["made"]
+
+
+@needs_ffmpeg
+def test_same_video_for_two_sections_is_flagged(videos, tmp_path):
+    # Seen for real: both halves' files picked together in every slot.
+    api = Api()
+    both = [str(videos["part1"]), str(videos["part2"])]
+    api.set_videos(0, both)
+    api.set_videos(1, both)
+    chk = api.check("0:01-0:03\n2nd Video\n0:04-0:06\n", str(tmp_path))
+    shared = [p for p in chk["problems"] if p["line"] is None]
+    assert len(shared) == 2 and "1st Half and 2nd Video" in shared[0]["message"]
+    assert chk["ready"]          # a warning, not a block
+    api.set_videos(1, [str(videos["h2"])])
+    assert not [p for p in api.check("0:01-0:03\n2nd Video\n0:04-0:06\n", str(tmp_path))["problems"]
+                if p["line"] is None]

@@ -16,6 +16,11 @@ from hclip.notes import Clip, Note, Problem
 END_SLACK_SECONDS = 15.0
 
 
+# A clip that ends this little past the end of one file still counts as
+# inside it (durations are rounded), instead of being joined to the next.
+_PART_SLACK = 0.1
+
+
 @dataclass
 class HalfVideo:
     """One section's footage: a single file, or several joined in order."""
@@ -24,7 +29,8 @@ class HalfVideo:
     reencode_audio: bool
     hevc: bool = False
     info: ffmpeg.MediaInfo | None = None   # first file's details
-    _concat_list: Path | None = None
+    durations: list[float] | None = None   # per file; None = one file
+    _lists: list[Path] = field(default_factory=list)
 
     @classmethod
     def open(cls, files: Sequence[str | Path]) -> "HalfVideo":
@@ -38,23 +44,48 @@ class HalfVideo:
             reencode_audio=any(i.audio_needs_reencode for i in infos),
             hevc=infos[0].video_codec == "hevc",
             info=infos[0],
+            durations=[i.duration for i in infos],
         )
 
     @property
     def is_concat(self) -> bool:
         return len(self.files) > 1
 
-    def source(self) -> Path:
-        if not self.is_concat:
-            return self.files[0]
-        if self._concat_list is None:
-            self._concat_list = ffmpeg.concat_list_tempfile(self.files)
-        return self._concat_list
+    def clip_source(self, start: float, end: float) -> tuple[Path, float, bool]:
+        """Where to read a clip from: ``(path, start within it, is_concat)``.
+
+        A clip inside one file is read straight from that file, where ``-ss``
+        seeks instantly. Only a clip that runs across into the next file gets
+        a joined list, and that list starts at the clip (``inpoint``): ``-ss``
+        can't seek in a joined input, so a list of whole files would copy
+        everything from the start of the half into every clip."""
+        durations = self.durations or [self.duration]
+        if len(self.files) == 1 or len(durations) != len(self.files):
+            return self.files[0], start, False
+        offset = 0.0
+        for i, d in enumerate(durations):
+            last = i == len(durations) - 1
+            if start < offset + d or last:
+                local = max(0.0, start - offset)
+                if end <= offset + d + _PART_SLACK or last:
+                    return self.files[i], local, False
+                spanned = [self.files[i]]
+                covered = offset + d
+                for f, fd in zip(self.files[i + 1:], durations[i + 1:]):
+                    spanned.append(f)
+                    covered += fd
+                    if end <= covered:
+                        break
+                listing = ffmpeg.concat_list_tempfile(spanned, inpoint=local)
+                self._lists.append(listing)
+                return listing, 0.0, True
+            offset += d
+        raise AssertionError("unreachable")
 
     def close(self) -> None:
-        if self._concat_list is not None:
-            self._concat_list.unlink(missing_ok=True)
-            self._concat_list = None
+        for listing in self._lists:
+            listing.unlink(missing_ok=True)
+        self._lists.clear()
 
 
 @dataclass
@@ -183,10 +214,11 @@ def run(
             break
         job.out.parent.mkdir(parents=True, exist_ok=True)
         part = _part_path(job.out)
+        src, src_start, joined = job.half.clip_source(job.start, job.end)
         cmd = ffmpeg.build_cut_cmd(
-            ff, job.half.source(), job.start, job.duration, part,
+            ff, src, src_start, job.duration, part,
             precise=precise, reencode_audio=job.half.reencode_audio,
-            is_concat=job.half.is_concat, hevc=job.half.hevc,
+            is_concat=joined, hevc=job.half.hevc,
         )
 
         def progress(secs: float, job: Job = job, i: int = i) -> None:

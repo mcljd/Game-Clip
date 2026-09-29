@@ -194,3 +194,34 @@ def test_leftover_parts_are_cleared_when_timings_change(phone, videos):
     page.click("#goHalves")
     wait_status(page, "Done: 1 video made")
     assert piece_count(page) == 0                 # old parts gone, new ones tidied
+
+
+def test_joined_half_clips_are_their_own_length(phone, videos, tmp_path):
+    # Regression: -ss can't seek in a joined input, so each clip used to carry
+    # all the footage from the start of the half.
+    page = phone
+    page.fill("#note", "0:25-0:30\n0:17-0:23\n")   # inside the 2nd file, and across the join
+    with page.expect_file_chooser() as fc:
+        page.click("[data-pick='0']")
+    fc.value.set_files([str(videos["part1"]), str(videos["part2"])])
+    page.wait_for_selector(".slot:nth-child(1).done", timeout=60_000)
+    page.uncheck("#cards")
+    page.check("#keepClips")
+    page.wait_for_timeout(400)
+    page.click("#goHalves")
+    wait_status(page, "Done: 1 video made")
+    reel = saved_video(page, 0, tmp_path)
+    assert 11 - 0.3 <= ffmpeg.probe(reel).duration <= 11 + 4.5   # two keyframe lead-ins at most
+    for i in (1, 2):
+        clip = saved_video(page, i, tmp_path)
+        assert ffmpeg.probe(clip).duration <= 6 + 2.1, clip.name
+        assert decodes_cleanly(clip)
+
+
+def test_same_video_for_two_sections_is_flagged(phone, videos):
+    page = phone
+    page.fill("#note", "0:01-0:03\n2nd Video\n0:04-0:06\n")
+    pick(page, 0, videos["h1"])
+    pick(page, 1, videos["h1"])
+    page.wait_for_function("document.getElementById('planProblems').textContent.includes('chosen for')")
+    assert "1st Half and 2nd Video" in page.inner_text("#planProblems")
