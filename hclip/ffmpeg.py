@@ -367,7 +367,7 @@ def _encode_args(look: Look) -> list[str]:
     return [
         "-c:v", "libx264", "-preset", look.preset, "-crf", str(look.crf),
         "-pix_fmt", "yuv420p", "-profile:v", "high",
-        "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2",
+        "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
         "-video_track_timescale", "90000",
     ]
 
@@ -398,7 +398,7 @@ def build_encode_clip_cmd(
             cmd += ["-af", trim_a]
     cmd += ["-t", f"{duration:.3f}", "-map", "0:v:0",
             "-map", "0:a:0" if has_audio else "1:a:0",
-            "-vf", vf, *_encode_args(look),
+            "-vf", vf, *_encode_args(look), "-movflags", "+faststart",
             "-progress", "pipe:1", "-nostats", "-f", "mp4", str(out)]
     return cmd
 
@@ -414,7 +414,7 @@ def build_card_cmd(
         "-loop", "1", "-framerate", look.fps, "-t", f"{seconds:.3f}", "-i", str(image),
         "-t", f"{seconds:.3f}", *_SILENCE,
         "-t", f"{seconds:.3f}", "-map", "0:v:0", "-map", "1:a:0",
-        "-vf", _fit_filter(look), *_encode_args(look),
+        "-vf", _fit_filter(look), *_encode_args(look), "-movflags", "+faststart",
         "-progress", "pipe:1", "-nostats", "-f", "mp4", str(out),
     ]
 

@@ -7,6 +7,7 @@ import pytest
 
 from hclip.app.api import Api
 from tests.conftest import needs_ffmpeg
+from tests.test_clipplan import ACCEPTANCE, NO_HEADERS
 
 UI = os.path.join(os.path.dirname(__file__), "..", "hclip", "app", "ui.html")
 playwright = pytest.importorskip("playwright.sync_api")
@@ -20,8 +21,8 @@ window.pywebview = { api: new Proxy({}, { get: (_, name) => (...args) => window.
 
 @pytest.fixture()
 def window(videos, tmp_path):
-    picks = []
-    api = Api(pick_files=lambda: picks.pop(0), pick_folder=lambda: str(tmp_path))
+    picks = [[str(videos["h2"]), str(videos["h1"])]]
+    api = Api(pick_files=lambda: picks.pop(0), pick_folder=lambda: str(tmp_path / "out"))
     with playwright.sync_playwright() as p:
         exe = os.environ.get("HCLIP_CHROMIUM")
         try:
@@ -30,40 +31,118 @@ def window(videos, tmp_path):
             if os.environ.get("CI"):
                 raise
             pytest.skip("no Chromium for Playwright; set HCLIP_CHROMIUM")
-        page = browser.new_page(viewport={"width": 1300, "height": 1000})
+        page = browser.new_page(viewport={"width": 1200, "height": 1000})
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.expose_function("__py", lambda name, args: getattr(api, name)(*args))
         page.add_init_script(BRIDGE)
         page.goto("file://" + os.path.abspath(UI))
-        yield page, picks
+        page.wait_for_function("document.getElementById('outDir').value !== ''")   # started
+        page.click("#addVideos")
+        page.wait_for_selector("#videos .video:nth-child(2)")
+        yield page, tmp_path
+        api.cancel()
+        api.wait(10)
         browser.close()
         assert errors == []
 
 
-def test_note_with_two_videos_from_two_halves(window, videos):
-    page, picks = window
-    page.fill("#note", "Video Bally\n0:03-0:05\n0:40-0:44\n2nd Half\n0:10-0:13\n"
-                       "2nd Video\n0:20-0:22\n2nd half\n0:30-0:33\n")
-    page.wait_for_function("document.getElementById('summary').textContent.includes('videos')")
-    assert "5 clips for 2 videos" in page.inner_text("#summary")
-    assert page.inner_text("#goHalves") == "Make 2 videos"
-    assert page.locator("#textList .tgroup").all_inner_texts() == ["Video Bally", "2nd Video"]
-    assert page.locator(".slot").count() == 2                 # only the two halves' videos
-    picks += [[str(videos["h1"])], [str(videos["h2"])]]
-    page.click("[data-pick='0']")
-    page.wait_for_selector(".slot:nth-child(1).done")
-    page.click("[data-pick='1']")
-    page.wait_for_selector(".slot:nth-child(2).done")
-    page.wait_for_function("!document.getElementById('goHalves').disabled")
-    assert page.locator("#reelList li").all_inner_texts()[:2] == [
-        "Video Bally\n3 clips · 0:09", "2nd Video\n2 clips · 0:05"]
+def paste(page, text):
+    page.fill("#note", text)
+    page.wait_for_timeout(500)
 
 
-def test_one_video_per_half_is_unchanged(window):
+def checked_videos(page):
+    """For each clip row, in order: the checked radio's label, or None."""
+    return page.evaluate("""() => [...document.querySelectorAll('#reels tr[data-row]')].map((tr) => {
+        const r = tr.querySelector('input[type=radio]:checked');
+        return r ? r.parentElement.textContent.trim() : null; })""")
+
+
+def test_acceptance_prefill_in_the_window(window):
     page, _ = window
-    page.fill("#note", "Dunloy clips\n1:52-2:10\n2nd Half Video\n3:04-3:37\n")
-    page.wait_for_function("document.getElementById('summary').textContent.includes('clips')")
-    assert page.inner_text("#goHalves") == "Make half reels"
-    assert page.locator("#textList .tgroup").count() == 0
-    assert page.locator(".slot").count() == 2
+    labels = page.eval_on_selector_all("#videos [data-label]", "els => els.map(e => e.value)")
+    assert labels == ["1st half", "2nd half"]
+    paste(page, ACCEPTANCE)
+    assert page.locator(".reel-head strong").all_inner_texts() == ["reel 1", "reel 2"]
+    assert checked_videos(page) == ["1st half"] * 5 + ["2nd half"] * 4 + ["1st half"] * 2 + ["2nd half"] * 6
+    assert page.locator("#reels tr.need").count() == 0
+    # The test videos are 60 s and 40 s, so most of these ranges are past the end: red, and no Cut.
+    assert page.locator("#reels tr.bad").count() > 0 and page.is_disabled("#cut")
+
+
+def test_no_headers_means_every_row_highlighted_and_cut_blocked(window):
+    page, _ = window
+    paste(page, NO_HEADERS)
+    assert page.locator("#reels tr[data-row]").count() == 17
+    assert page.locator("#reels tr.need").count() == 17
+    assert checked_videos(page) == [None] * 17
+    assert page.is_disabled("#cut")
+    assert page.inner_text("#status") == "Choose a video for 17 clips (highlighted)."
+
+
+def test_set_all_then_cut_and_see_checked_results(window):
+    page, tmp = window
+    paste(page, "0:10-0:16\n0:20-0:25 Point - Conor\n0:05-0:08")
+    assert page.locator("#reels tr.need").count() == 3 and page.is_disabled("#cut")
+    page.select_option("[data-setall='0']", "0")
+    page.wait_for_function("document.querySelectorAll('#reels tr.need').length === 0")
+    assert checked_videos(page) == ["1st half"] * 3
+    assert page.locator("#reels .yours").count() == 3
+    page.fill("#outDir", str(tmp / "out"))
+    page.fill("[data-name='0']", "bc clip 1")
+    page.wait_for_function("!document.getElementById('cut').disabled")
+    page.click("#cut")
+    page.wait_for_selector("#done:not([hidden])", timeout=120_000)
+    assert page.inner_text("#doneTitle") == "1 reel made and checked"
+    assert page.locator("#results .off").count() == 0
+    assert page.locator("#results .ok").count() == 4          # 3 clips + the reel
+    assert sorted(p.name for p in (tmp / "out").iterdir()) == [
+        "bc clip 1 - 01.mp4", "bc clip 1 - 02.mp4", "bc clip 1 - 03.mp4", "bc clip 1.mp4"]
+
+
+def test_select_several_rows_and_set_their_video(window):
+    page, _ = window
+    paste(page, "1st half\n0:10-0:16\n0:20-0:25\n0:05-0:08")
+    page.check("#reels tr[data-row]:nth-child(1) [data-sel]")
+    page.check("#reels tr[data-row]:nth-child(3) [data-sel]")
+    assert page.inner_text("#bulkCount") == "2 clips selected"
+    page.select_option("#bulkVideo", "1")
+    page.click("#bulkApply")
+    page.wait_for_function("document.getElementById('bulk').hidden")
+    assert checked_videos(page) == ["2nd half", "1st half", "2nd half"]
+
+
+def test_hand_choice_survives_editing_the_timings(window):
+    page, _ = window
+    text = "reel 1\n1st half\n0:10-0:16\n0:20-0:25\n"
+    paste(page, text)
+    page.check("#reels tr[data-row]:nth-child(2) input[type=radio][value='1']")   # 0:20-0:25 -> 2nd half
+    page.wait_for_function("document.querySelectorAll('#reels .yours').length === 1")
+    paste(page, "reel 1\n1st half\n0:02-0:04\n0:10-0:16\n0:20-0:25\n")         # a clip added above it
+    assert checked_videos(page) == ["1st half", "1st half", "2nd half"]
+    assert "0:20-0:25 is now clip 3 (was 2)" in page.inner_text("#stale")
+    paste(page, "reel 1\n1st half\n0:02-0:04\n0:10-0:16\n")                    # and now removed
+    assert "no longer in the timings" in page.inner_text("#stale")
+    page.click("#dropStale")
+    page.wait_for_function("!document.getElementById('stale').textContent.trim()")
+
+
+def test_ignored_lines_are_listed_and_text_screens_write_into_the_note(window):
+    page, _ = window
+    paste(page, "Ballycastle clips\n1st half\n0:10-0:16\nnice score\n")
+    assert "Line 1: “Ballycastle clips”" in page.inner_text("#noteNotes")
+    assert "Line 4: “nice score”" in page.inner_text("#noteNotes")
+    page.fill("#reels [data-line='3']", "Point - Conor")
+    page.wait_for_timeout(400)
+    assert page.input_value("#note").splitlines()[2] == "0:10-0:16 Point - Conor"
+
+
+def test_many_videos_use_a_dropdown(window, videos):
+    page, _ = window
+    page.evaluate("async () => { await window.__py('add_video_paths', [[%r, %r]]); await window.onVideosDropped([]); }"
+                  % (str(videos["part1"]), str(videos["part2"])))
+    page.wait_for_selector("#videos .video:nth-child(4)")
+    paste(page, "0:01-0:03")
+    assert page.locator("#reels select[data-key]").count() == 1
+    assert page.locator("#reels input[type=radio]").count() == 0

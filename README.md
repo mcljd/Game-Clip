@@ -40,24 +40,51 @@ slower, so a 5-minute half can take 5-10 minutes. Phone reels are made at
 1. **Install:** run `GAA-Clips-Setup.exe`. No admin password needed.
    Windows may show *"Windows protected your PC"* because the app isn't
    code-signed yet: click **More info → Run anyway**.
-2. **Paste the timings** from your phone into box 1. Each clip appears
-   straight away; typos are shown in red with the line number.
-3. **Choose the videos:** one per half (box 2 shows a slot for every half
-   in your note). If a half was recorded as several files, select them all
-   at once and they're joined in order. Don't select both halves' videos
-   together: each box takes only that half's video. The app warns if the
-   same video is chosen for two boxes. Videos aren't copied or uploaded, so
-   big files are fine, straight off an SD card or USB drive.
-4. **Make half reels** or **Make one video.** They're saved in a
-   "*Match name* highlights" folder next to the videos. Press **Open folder**
-   when it's done.
+2. **Videos:** press **Add videos…** (or drag them onto the window) and add
+   the match recordings, usually one per half. Each gets a label you can
+   edit ("1st half", "2nd half"); its length is shown next to it. Any number
+   of videos works. Times are counted from the start of each video.
+3. **Timings:** paste your notes, e.g.
 
-Pressing a Make button again rebuilds the videos (so changed text or timings
-are picked up). If you press Stop, the parts already made are kept and the
-next Make carries on from there.
+   ```
+   reel 1
+   1st half
+   3:43-4:01
+   11:26-11:40 Point - Conor
+   2nd Half
+   3:10-3:34
+
+   reel 2
+   1st half
+   6:56-7:07
+   ```
+
+   `reel N` starts another finished video. A half line picks the video for
+   the clips under it by matching the videos' labels. Text after a time is
+   shown on a black screen before that clip.
+4. **Clip list:** every clip is listed under its reel with its video ticked.
+   A clip with no half line above it (or one that matches no label) is
+   highlighted and has no video until you choose one; Cut stays off until
+   every clip has one. "Set all to" does a whole reel; tick several clips
+   to set them together. Your own choices stay with their clip when you
+   edit the timings.
+5. **Cut:** each clip gets 1 second extra at the end by default (both ends
+   can be set). Every clip is re-encoded so it starts exactly on time, the
+   reel is joined in the order written, and every clip and reel is measured
+   afterwards: the results table shows a tick for each one that's the right
+   length. You get each reel (named as you like, e.g. `bc clip 1.mp4`) and
+   its clips (`bc clip 1 - 01.mp4` …) in the folder you chose.
+
+Save to a folder on the laptop rather than in OneDrive if you can: writing
+big files into OneDrive can be very slow. (The videos are made on the laptop
+first either way.) A video that's "online only" in OneDrive is flagged: set it
+to *Always keep on this device* first.
 
 If the window won't open on an older PC, install Microsoft's free
 [Edge WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703).
+
+The iPhone/browser version and the `hclip` command line still use the
+earlier one-video-per-half layout described below.
 
 ## On iPhone (or any browser): the web version
 

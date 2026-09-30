@@ -61,6 +61,30 @@ def _fatal_box(message: str) -> None:
         print(message, file=sys.stderr)
 
 
+def _bind_drop(win, api: Api) -> None:
+    """Videos dragged onto the window: pywebview (5+) gives Python the full
+    paths, which the page itself can't see. If this pywebview can't, the
+    Add videos button still works."""
+    import json
+    try:
+        from webview.dom import DOMEventHandler
+    except ImportError:
+        return
+
+    def on_drop(event) -> None:
+        files = (event.get("dataTransfer") or {}).get("files") or []
+        paths = [f["pywebviewFullPath"] for f in files if f.get("pywebviewFullPath")]
+        if not paths:
+            return
+        errors = api.add_video_paths(paths)["errors"]
+        win.evaluate_js(f"window.onVideosDropped({json.dumps(errors)})")
+
+    try:
+        win.dom.document.events.drop += DOMEventHandler(on_drop, True, True)
+    except Exception:  # an older pywebview: dropping just won't add videos
+        pass
+
+
 def main() -> None:
     if "--selftest" in sys.argv:
         i = sys.argv.index("--selftest")
@@ -85,11 +109,12 @@ def main() -> None:
     api = Api(pick_files=pick_files, pick_folder=pick_folder)
     window.append(webview.create_window(
         "GAA Clips", html=_load_ui(), js_api=api,
-        width=1040, height=800, min_size=(720, 600),
+        width=1120, height=860, min_size=(760, 600),
     ))
     try:
         # On Windows insist on Edge WebView2; the old IE engine can't run the page.
-        webview.start(gui="edgechromium" if sys.platform == "win32" else None)
+        webview.start(_bind_drop, (window[0], api),
+                      gui="edgechromium" if sys.platform == "win32" else None)
     except Exception as e:
         _fatal_box(
             "GAA Clips couldn't open its window.\n\n"
