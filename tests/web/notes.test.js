@@ -13,6 +13,8 @@ for (const c of cases) {
     assert.equal(note.title, c.title);
     assert.deepEqual(note.sections.map((s) => [s.tag, s.clips.length]), c.sections);
     assert.deepEqual(note.problems.map((p) => [p.line, p.fatal]), c.problems);
+    if (c.groups) assert.deepEqual(note.groups, c.groups);
+    if (c.clip_groups) assert.deepEqual(note.clips.map((x) => x.group), c.clip_groups);
     if (c.clips) {
       assert.deepEqual(note.sections.flatMap((s) => s.clips.map((x) => [x.start, x.end, x.label])), c.clips);
     }

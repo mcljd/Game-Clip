@@ -38,7 +38,7 @@ jobs:
       - run: pip install -e ".[dev]" playwright
       - run: python -m playwright install --with-deps chromium
       - name: End-to-end in headless Chromium (real ffmpeg.wasm)
-        run: pytest -q tests/test_web_e2e.py -rs
+        run: pytest -q tests/test_web_e2e.py tests/test_app_ui.py -rs
 
   windows:
     runs-on: windows-latest

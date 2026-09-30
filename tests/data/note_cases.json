@@ -16,6 +16,45 @@
   "problems": []
  },
  {
+  "name": "real Ballycastle note: two videos, each from both halves",
+  "text": "Video Ballycastle \n\n3:43-4:01\n11:26-11:40\n11:50-12:13\n15:51-16:21\n16:32-17:00\n2nd Half\n3:10-3:34\n12:36-13:09\n26:58-27:16\n32:00-32:12\n\n\n\n2nd Video\n\n6:56-7:07\n17:38-17:59\n2nd half \n5:05-5:15\n5:33-5:44\n6:33-6:47\n6:58-7:12\n7:23-7:50\n8:05-8:21\n",
+  "title": "Video Ballycastle",
+  "sections": [
+   [
+    "h1",
+    7
+   ],
+   [
+    "h2",
+    10
+   ]
+  ],
+  "problems": [],
+  "groups": [
+   "Video Ballycastle",
+   "2nd Video"
+  ],
+  "clip_groups": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1
+  ]
+ },
+ {
   "name": "separators, spacing, labels",
   "text": "1:52 - 2:10\n3:05–3:33 Goal Conor\n4:00 to 4:20: point\n5:00—5:10",
   "title": "",
@@ -78,8 +117,8 @@
   "problems": []
  },
  {
-  "name": "plain text after clips = new video",
-  "text": "Dunloy\n1:00-1:10\nSecond video\n2:00-2:10",
+  "name": "plain text after clips = new recording",
+  "text": "Dunloy\n1:00-1:10\nCamera two\n2:00-2:10",
   "title": "Dunloy",
   "sections": [
    [
@@ -164,17 +203,13 @@
   ]
  },
  {
-  "name": "duplicate section names get unique tags",
+  "name": "naming a half again goes back to the same recording",
   "text": "2nd half\n1:00-1:10\n2nd half\n2:00-2:10",
   "title": "",
   "sections": [
    [
     "h2",
-    1
-   ],
-   [
-    "h2_2",
-    1
+    2
    ]
   ],
   "problems": []
@@ -201,5 +236,89 @@
    ]
   ],
   "problems": []
+ },
+ {
+  "name": "video lines without a video title",
+  "text": "Dunloy clips\n1:00-1:10\nSecond half\n2:00-2:10\nVideo 2\n1:00-1:10\n",
+  "title": "Dunloy clips",
+  "sections": [
+   [
+    "h1",
+    2
+   ],
+   [
+    "h2",
+    1
+   ]
+  ],
+  "problems": [],
+  "groups": [
+   "1st Video",
+   "Video 2"
+  ],
+  "clip_groups": [
+   0,
+   0,
+   1
+  ]
+ },
+ {
+  "name": "one video line is just a title",
+  "text": "Video Ballycastle\n1:00-1:10\n2nd half\n2:00-2:10\n",
+  "title": "Video Ballycastle",
+  "sections": [
+   [
+    "h1",
+    1
+   ],
+   [
+    "h2",
+    1
+   ]
+  ],
+  "problems": [],
+  "groups": []
+ },
+ {
+  "name": "2nd Half Video names a half, not a new video",
+  "text": "Dunloy\n1:00-1:10\n2nd Half Video\n2:00-2:10\n",
+  "title": "Dunloy",
+  "sections": [
+   [
+    "h1",
+    1
+   ],
+   [
+    "h2",
+    1
+   ]
+  ],
+  "problems": [],
+  "groups": []
+ },
+ {
+  "name": "video names written above their clips",
+  "text": "Dunloy\nVideo 1\n1:00-1:10\n2nd half\n2:00-2:10\nVideo 2\n1:30-1:40\n",
+  "title": "Dunloy",
+  "sections": [
+   [
+    "h1",
+    2
+   ],
+   [
+    "h2",
+    1
+   ]
+  ],
+  "problems": [],
+  "groups": [
+   "Video 1",
+   "Video 2"
+  ],
+  "clip_groups": [
+   0,
+   0,
+   1
+  ]
  }
 ]

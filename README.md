@@ -114,11 +114,31 @@ Things to know on iPhone:
 | `1:52-2:10`, `1:52 - 2:10`, `1:52–2:10`, `1:52 to 2:10`, `1.52-2.10` | a clip |
 | `1:02:03-1:02:30` | a clip past the hour (whole-match file) |
 | `3:05-3:33 Goal Conor` | a clip labelled "Goal Conor" |
-| `2nd Half`, `Second half video`, `Extra time 1`, `ET2`, `Penalties` | starts the next section / next video |
+| `2nd Half`, `Second half video`, `Extra time 1`, `ET2`, `Penalties` | the next clips come from that half's video |
+| `2nd Video`, `Video 2` (a line with "video" but no half) | starts another video to make (see below) |
 | first text line before any clip | the match title |
 
-Timings are measured from the start of **that section's video**, not the
+Timings are measured from the start of **that half's video**, not the
 match clock.
+
+**Several videos from one match.** A coach can list more than one video
+(say, one for the forwards and one for the backs), each with clips from
+both halves:
+
+```
+Video Ballycastle
+3:43-4:01          <- 1st half
+2nd Half
+3:10-3:34          <- 2nd half
+2nd Video
+6:56-7:07          <- each video starts on the 1st half again
+2nd half
+5:05-5:15
+```
+
+Choose one video per half as usual (here just two), and the first Make
+button makes `Video Ballycastle.mp4` and `Video Ballycastle - 2nd Video.mp4`,
+each with its clips in the order they're written.
 
 ## Command line
 

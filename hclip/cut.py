@@ -145,6 +145,8 @@ def plan(note: Note, halves: Sequence[HalfVideo], out_dir: Path) -> Plan:
                 ))
             kept.append((section.tag, c, c.start, end, half))
 
+    kept.sort(key=lambda k: k[1].line)   # the note's order (a half can be named more than once)
+    problems.sort(key=lambda pr: pr.line)
     total = len(kept)
     jobs = [
         Job(n, tag, c, start, end, half,

@@ -80,6 +80,7 @@
   .textlist { display: grid; gap: 6px; max-height: 420px; overflow: auto; padding-right: 4px; }
   .trow { display: grid; grid-template-columns: 58px 104px 1fr; gap: 8px; align-items: center; font-size: 13px; }
   .trow .half { color: var(--muted); font-size: 12px; }
+  .tgroup { font-weight: 700; font-size: 13px; color: var(--accent); margin-top: 6px; }
   .trow .time { font-variant-numeric: tabular-nums; }
   .trow input { padding: 6px 8px; }
   .preview { display: block; width: 100%; max-width: 360px; aspect-ratio: 16 / 9; border-radius: 6px; margin: 4px 0 10px; background: #000; }
@@ -192,7 +193,7 @@ Dunloy clips
 <script>
 const $ = (id) => document.getElementById(id);
 let api = null;
-let note = { sections: [], clip_count: 0, problems: [], title: "" };
+let note = { sections: [], clip_count: 0, problems: [], title: "", groups: [] };
 let slots = {};          // index -> info from Python
 let chk = null;          // last check() result
 let titleEdited = false, outEdited = false;
@@ -264,10 +265,14 @@ function renderProblems(el, problems) {
 
 function renderNote() {
   const s = note.sections;
-  $("summary").innerHTML = note.clip_count
-    ? `<strong>${plural(note.clip_count, "clip")}</strong> · ` +
-      s.map((x) => `${esc(x.name)}: ${x.clips.length}`).join(" · ")
-    : "";
+  const g = note.groups || [];
+  $("summary").innerHTML = !note.clip_count ? "" : g.length
+    ? `<strong>${plural(note.clip_count, "clip")}</strong> for ${g.length} videos · ` +
+      g.map((x) => `${esc(x.name)}: ${x.clips}`).join(" · ")
+    : `<strong>${plural(note.clip_count, "clip")}</strong> · ` +
+      s.map((x) => `${esc(x.name)}: ${x.clips.length}`).join(" · ");
+  // Several videos in the note: one per video instead of one per half.
+  $("goHalves").textContent = g.length ? `Make ${g.length} videos` : "Make half reels";
   renderProblems($("noteProblems"), note.problems);
   if (!titleEdited && note.title) $("title").value = note.title.replace(/\s+clips?$/i, "");
 }
@@ -278,12 +283,17 @@ function renderPreview(text) {
 }
 
 function renderTextList() {
-  const rows = note.sections.flatMap((s) => s.clips.map((c) => ({ ...c, half: s.name })));
+  const groups = note.groups || [];
+  const rows = note.sections.flatMap((s) => s.clips.map((c) => ({ ...c, half: s.name })))
+    .sort((a, b) => a.line - b.line);
   $("textCard").hidden = !rows.length;
-  const sig = rows.map((r) => `${r.line}|${r.start}|${r.end}`).join(",");
+  const sig = rows.map((r) => `${r.line}|${r.start}|${r.end}|${r.group}`).join(",") + groups.map((g) => g.name).join("|");
   if (sig !== textSig) {
     textSig = sig;
-    $("textList").innerHTML = rows.map((r) => `<div class="trow">
+    // With several videos in the note, a heading above each video's clips.
+    const heading = (r, i) => groups.length && (i === 0 || rows[i - 1].group !== r.group)
+      ? `<div class="tgroup">${esc(groups[r.group].name)}</div>` : "";
+    $("textList").innerHTML = rows.map((r, i) => `${heading(r, i)}<div class="trow">
         <span class="half">${esc(r.half.replace(/\s*video$/i, ""))}</span>
         <span class="time">${r.start}–${r.end}</span>
         <input type="text" data-line="${r.line}" value="${esc(r.label)}" placeholder="No text screen" aria-label="Text before ${r.start}">

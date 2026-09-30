@@ -72,6 +72,8 @@
         kept.push({ index: i, section: s, clip: c, start: c.start, end });
       }
     });
+    kept.sort((a, b) => a.clip.line - b.clip.line);   // the note's order (a half can be named more than once)
+    problems.sort((a, b) => a.line - b.line);
     const match = matchName();
     const jobs = kept.map((k, j) => ({
       ...k, number: j + 1, duration: k.end - k.start, match,
@@ -87,7 +89,7 @@
     const used = {};
     const reel = (baseName, js) => {
       const n = used[baseName.toLowerCase()] = (used[baseName.toLowerCase()] || 0) + 1;
-      const name = n === 1 ? baseName : `${baseName} (${n})`;   // two "2nd half"s mustn't clash
+      const name = n === 1 ? baseName : `${baseName} (${n})`;   // two videos with one name mustn't clash
       const copy = !cards && new Set(js.map((j) => slots[j.index].joinKey)).size === 1;
       const look = sharedLook || (copy ? null : lookFor(slots[js[0].index].info, maxH));
       const duration = js.reduce((t, j) => t + j.duration, 0);
@@ -95,11 +97,19 @@
       const bytes = look
         ? duration * (look.height >= 1080 ? 1.2e6 : 0.6e6)
         : js.reduce((t, j) => t + slots[j.index].size / slots[j.index].duration * j.duration, 0);
-      return { name, jobs: js, file: `${safeName(`${match} - ${name}`)}.mp4`,
+      // A video named by the title line is saved under the title alone (as reel.py does).
+      const file = name.trim().toLowerCase() === match.toLowerCase() ? safeName(match) : safeName(`${match} - ${name}`);
+      return { name, jobs: js, file: `${file}.mp4`,
         key: `reel:${match}/${name}`, duration, look, bytes };
     };
-    const halves = note.sections.map((s) => reel(s.name, jobs.filter((j) => j.section === s))).filter((r) => r.jobs.length);
+    // One reel per video the note names ("2nd Video" lines), each mixing both
+    // halves; otherwise one per half.
+    const halves = (note.groups.length
+      ? note.groups.map((g, gi) => reel(g, jobs.filter((j) => j.clip.group === gi)))
+      : note.sections.map((s) => reel(s.name, jobs.filter((j) => j.section === s)))).filter((r) => r.jobs.length);
     const whole = reel("Whole match", jobs);
+    halves.forEach((r, i) => { r.order = i; });   // saved videos are listed in the note's order
+    whole.order = halves.length;
     const encode = cards || halves.some((r) => r.look) || !!whole.look;
     return { ready: true, message: "", jobs, problems, halves, whole, labelled, cards, encode };
   }
@@ -127,10 +137,13 @@
   }
 
   function renderNote() {
-    const s = note.sections;
-    $("summary").innerHTML = note.clipCount
-      ? `<strong>${plural(note.clipCount, "clip")}</strong> · ` + s.map((x) => `${esc(x.name)}: ${x.clips.length}`).join(" · ")
-      : "";
+    const s = note.sections, g = note.groups;
+    const inGroup = (i) => note.clips.filter((c) => c.group === i).length;
+    $("summary").innerHTML = !note.clipCount ? "" : g.length
+      ? `<strong>${plural(note.clipCount, "clip")}</strong> for ${g.length} videos · ` + g.map((x, i) => `${esc(x)}: ${inGroup(i)}`).join(" · ")
+      : `<strong>${plural(note.clipCount, "clip")}</strong> · ` + s.map((x) => `${esc(x.name)}: ${x.clips.length}`).join(" · ");
+    // Several videos in the note: one per video instead of one per half.
+    $("goHalves").textContent = g.length ? `Make ${g.length} videos` : "Half reels";
     renderProblems($("noteProblems"), note.problems);
     if (!titleEdited && note.title) $("title").value = note.title.replace(/\s+clips?$/i, "");
   }
@@ -141,12 +154,17 @@
   }
 
   function renderTextList() {
-    const rows = note.sections.flatMap((s) => s.clips.map((c) => ({ ...c, half: s.name })));
+    const groups = note.groups;
+    const rows = note.sections.flatMap((s) => s.clips.map((c) => ({ ...c, half: s.name })))
+      .sort((a, b) => a.line - b.line);
     $("textCard").hidden = !rows.length;
-    const sig = rows.map((r) => `${r.line}|${r.start}|${r.end}`).join(",");
+    const sig = rows.map((r) => `${r.line}|${r.start}|${r.end}|${r.group}`).join(",") + groups.join("|");
     if (sig !== textSig) {
       textSig = sig;
-      $("textList").innerHTML = rows.map((r) => `<div class="trow">
+      // With several videos in the note, a heading above each video's clips.
+      const heading = (r, i) => groups.length && (i === 0 || rows[i - 1].group !== r.group)
+        ? `<div class="tgroup">${esc(groups[r.group])}</div>` : "";
+      $("textList").innerHTML = rows.map((r, i) => `${heading(r, i)}<div class="trow">
           <span class="half">${esc(r.half.replace(/\s*video$/i, "").replace(/\s*half$/i, ""))}</span>
           <span class="time">${fmt(r.start)}–${fmt(r.end)}</span>
           <input type="text" data-line="${r.line}" value="${esc(r.label)}" placeholder="No text screen" aria-label="Text before ${fmt(r.start)}">
@@ -213,7 +231,7 @@
   async function renderTray() {
     const rank = (r) => (r.kind === "reel" ? 0 : 1);   // reels first, then kept clips
     trayRows = (await tray.all()).filter((r) => r.kind !== "piece")
-      .sort((a, b) => rank(a) - rank(b) || a.key.localeCompare(b.key));
+      .sort((a, b) => rank(a) - rank(b) || (a.order || 0) - (b.order || 0) || a.key.localeCompare(b.key));
     trayFiles = trayRows.map((r) => new File([r.blob], r.name, { type: "video/mp4" }));
     $("trayCard").hidden = !trayRows.length;
     const total = trayRows.reduce((n, r) => n + r.size, 0);
@@ -414,7 +432,7 @@
           if (!clips) throw new Error("none of its clips could be made.");
           let blob = await engine.join(blobs, { onProgress: (s) => show(stage, Math.min(s, reel.duration) * JOIN_WEIGHT) });
           if (dir) await writeToFolder(dir, reel.file, blob);
-          else await tray.put({ key: reel.key, kind: "reel", name: reel.file, match: reel.jobs[0].match,
+          else await tray.put({ key: reel.key, kind: "reel", order: reel.order, name: reel.file, match: reel.jobs[0].match,
             blob, size: blob.size, duration: reel.duration + (p.cards ? reel.jobs.filter((j) => j.clip.label.trim()).length * Number($("cardSecs").value) : 0) });
           blob = null;
           made++;

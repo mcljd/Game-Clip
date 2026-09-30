@@ -85,13 +85,16 @@ class Api:
                     "clips": [
                         {"start": timecode.fmt(c.start), "end": timecode.fmt(c.end),
                          "length": timecode.fmt(c.duration), "label": c.label,
-                         "line": c.line}
+                         "line": c.line, "group": c.group}
                         for c in s.clips
                     ],
                 }
                 for s in note.sections
             ],
             "problems": [_problem(p) for p in note.problems],
+            # Output videos when the note names several ("2nd Video" lines).
+            "groups": [{"name": g, "clips": sum(1 for c in note.clips if c.group == i)}
+                       for i, g in enumerate(note.groups)],
         }
 
     # -------------------------------------------------------------- videos

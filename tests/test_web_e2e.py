@@ -77,7 +77,7 @@ def saved_video(page, index, tmp_path):
       const t = new ClipTray(); await t.init();
       const rank = (x) => (x.kind === 'reel' ? 0 : 1);
       const r = (await t.all()).filter((x) => x.kind !== 'piece')
-        .sort((a, b) => rank(a) - rank(b) || a.key.localeCompare(b.key))[i];
+        .sort((a, b) => rank(a) - rank(b) || (a.order || 0) - (b.order || 0) || a.key.localeCompare(b.key))[i];
       const b = new Uint8Array(await r.blob.arrayBuffer()); let s = '';
       for (let k = 0; k < b.length; k += 0x8000) s += String.fromCharCode.apply(null, b.subarray(k, k + 0x8000));
       return {name: r.name, b64: btoa(s)};
@@ -165,17 +165,28 @@ def piece_count(page):
                          "return (await t.all()).filter(x => x.kind === 'piece').length; }")
 
 
-def test_duplicate_section_names_make_two_reels(phone, videos):
+def test_videos_that_mix_both_halves(phone, videos, tmp_path):
+    # Real note shape: two recordings (the halves), two videos, each with
+    # clips from both halves in the order they're written.
     page = phone
-    page.fill("#title", "T")
-    page.fill("#note", "2nd half\n0:01-0:03\n2nd half\n0:04-0:06\n")
+    page.fill("#title", "")
+    page.fill("#note", "Video Bally\n0:03-0:05\n0:40-0:44\n2nd Half\n0:10-0:13\n"
+                       "2nd Video\n0:20-0:22\n2nd half\n0:30-0:33\n")
+    page.wait_for_timeout(300)
+    assert "for 2 videos" in page.inner_text("#summary")
+    assert page.inner_text("#goHalves") == "Make 2 videos"
+    assert page.locator("#textList .tgroup").all_inner_texts() == ["Video Bally", "2nd Video"]
     pick(page, 0, videos["h1"])
     pick(page, 1, videos["h2"])
+    assert page.locator(".slot").count() == 2        # just the two halves' recordings
     page.uncheck("#cards")
     page.wait_for_timeout(300)
     page.click("#goHalves")
     wait_status(page, "Done: 2 videos made")
-    assert page.locator("#clipList .name").all_inner_texts() == ["T - 2nd half.mp4", "T - 2nd half (2).mp4"]
+    assert page.locator("#clipList .name").all_inner_texts() == ["Video Bally.mp4", "Video Bally - 2nd Video.mp4"]
+    first = saved_video(page, 0, tmp_path)
+    assert 9 - 0.3 <= ffmpeg.probe(first).duration <= 9 + 3 * 2.1
+    assert decodes_cleanly(first)
 
 
 def test_leftover_parts_are_cleared_when_timings_change(phone, videos):
@@ -220,8 +231,8 @@ def test_joined_half_clips_are_their_own_length(phone, videos, tmp_path):
 
 def test_same_video_for_two_sections_is_flagged(phone, videos):
     page = phone
-    page.fill("#note", "0:01-0:03\n2nd Video\n0:04-0:06\n")
+    page.fill("#note", "0:01-0:03\n2nd Half\n0:04-0:06\n")
     pick(page, 0, videos["h1"])
     pick(page, 1, videos["h1"])
     page.wait_for_function("document.getElementById('planProblems').textContent.includes('chosen for')")
-    assert "1st Half and 2nd Video" in page.inner_text("#planProblems")
+    assert "1st Half and 2nd Half" in page.inner_text("#planProblems")

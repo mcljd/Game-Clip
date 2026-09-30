@@ -45,7 +45,10 @@ class Reel:
 
 
 def reel_filename(title: str, name: str) -> str:
-    return safe_name(f"{title.strip() or 'Match'} - {name}") + ".mp4"
+    title = title.strip() or "Match"
+    if name.strip().lower() == title.lower():     # a video named by the title line
+        return safe_name(title) + ".mp4"
+    return safe_name(f"{title} - {name}") + ".mp4"
 
 
 def safe_name(name: str) -> str:
@@ -59,14 +62,20 @@ def plan_reels(note: Note, jobs: Sequence[Job], out_dir: Path, title: str, *,
                halves: bool = True, whole: bool = False) -> list[Reel]:
     reels: list[Reel] = []
     if halves:
+        # One reel per video the note names ("Video Ballycastle", "2nd Video"),
+        # each mixing both halves; otherwise one per half.
+        if note.groups:
+            parts = [(name, [j for j in jobs if j.clip.group == g])
+                     for g, name in enumerate(note.groups)]
+        else:
+            parts = [(s.name, [j for j in jobs if j.section_tag == s.tag]) for s in note.sections]
         used: dict[str, int] = {}
-        for s in note.sections:
-            mine = [j for j in jobs if j.section_tag == s.tag]
+        for s_name, mine in parts:
             if not mine:
                 continue
-            # Two sections called "2nd half" mustn't overwrite each other.
-            n = used[s.name.lower()] = used.get(s.name.lower(), 0) + 1
-            name = s.name if n == 1 else f"{s.name} ({n})"
+            # Two videos with the same name mustn't overwrite each other.
+            n = used[s_name.lower()] = used.get(s_name.lower(), 0) + 1
+            name = s_name if n == 1 else f"{s_name} ({n})"
             reels.append(Reel(name, mine, out_dir / reel_filename(title, name)))
     if whole and jobs:
         reels.append(Reel("Whole match", list(jobs), out_dir / reel_filename(title, "Whole match")))

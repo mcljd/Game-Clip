@@ -56,17 +56,29 @@
     return null;
   }
 
+  // A line naming an output video ("2nd Video", "Video Ballycastle"), as
+  // opposed to a half ("2nd Half Video" names a half). Same rule as notes.py.
+  const isVideoHeader = (line) => /\bvideo\b/i.test(line) && sectionTag(line, 1) === null;
+
   function parse(text) {
-    let title = "";
+    let title = "", titleIsVideo = false;
     const sections = [];
     const problems = [];
     let current = null;
+    const groups = [];          // names of groups after the first
+    let firstName = "";         // a "Video 1" line naming the first group
+    let group = 0, groupHasClips = false;
 
     const newSection = (name) => {
       const pos = sections.length + 1;
       const s = { name, tag: sectionTag(name, pos) || `part${pos}`, clips: [] };
       sections.push(s);
       return s;
+    };
+    // The section for a half: the same one each time it's named.
+    const periodSection = (name) => {
+      const tag = sectionTag(name, sections.length + 1);
+      return sections.find((s) => s.tag === tag) || newSection(name);
     };
 
     const lines = text.split(LINE_BREAK);
@@ -85,17 +97,18 @@
           problems.push({ line: lineno, message: `ends (${endS}) before it starts (${startS}). This line is skipped.`, fatal: true });
           return;
         }
-        if (!current) current = newSection("1st Half");
-        const clip = { start, end, label, line: lineno };
+        if (!current) current = periodSection("1st Half");
+        const clip = { start, end, label, line: lineno, group };
         if (end - start > LONG_CLIP_SECONDS) {
           problems.push({ line: lineno, message: `this clip is ${fmt(end - start)} long - is that a typo?`, fatal: false });
         }
         for (const o of current.clips) {
-          if (clip.start < o.end && o.start < clip.end) {
+          if (o.group === group && clip.start < o.end && o.start < clip.end) {
             problems.push({ line: lineno, message: `overlaps the clip on line ${o.line}`, fatal: false });
           }
         }
         current.clips.push(clip);
+        groupHasClips = true;
         return;
       }
 
@@ -104,21 +117,34 @@
         return;
       }
 
-      const isPeriod = sectionTag(line, sections.length + 1) !== null;
-      if (isPeriod && (!current || current.clips.length)) current = newSection(line);
-      else if (isPeriod) { current.name = line; current.tag = sectionTag(line, sections.length) || current.tag; }
-      else if (!current && !title) title = line;
-      else if (current && current.clips.length) current = newSection(line);
+      if (sectionTag(line, sections.length + 1) !== null) {
+        current = periodSection(line);
+        if (!current.clips.length) current.name = line;   // header right after another: keep the latest wording
+      } else if (isVideoHeader(line) && groupHasClips) {
+        groups.push(line);
+        group += 1;
+        groupHasClips = false;
+        current = null;                                  // each video starts from the 1st half
+      } else if (isVideoHeader(line) && title) {
+        // A video's name written before its first clip ("Dunloy" then "Video 1").
+        if (group === 0) firstName = line; else groups[groups.length - 1] = line;
+      } else if (!current && !title) {
+        title = line;
+        titleIsVideo = isVideoHeader(line);
+      } else if (current && current.clips.length) current = newSection(line);
     });
 
     const kept = sections.filter((s) => s.clips.length);
+    const used = new Set(kept.flatMap((s) => s.clips.map((c) => c.group)));
+    const names = used.size > 1 ? [firstName || (titleIsVideo ? title : "1st Video"), ...groups] : [];
     const seen = {};
     for (const s of kept) {
       if (seen[s.tag]) { seen[s.tag] += 1; s.tag = `${s.tag}_${seen[s.tag]}`; }
       else seen[s.tag] = 1;
     }
     return {
-      title, sections: kept, problems,
+      title, sections: kept, problems, groups: names,
+      clips: kept.flatMap((s) => s.clips).sort((a, b) => a.line - b.line),
       clipCount: kept.reduce((n, s) => n + s.clips.length, 0),
     };
   }

@@ -34,9 +34,19 @@ def test_explicit_first_half_header_and_extra_time():
 
 
 def test_non_period_text_after_clips_starts_new_section():
-    note = notes.parse("Dunloy\n1:00-1:10\nSecond video\n2:00-2:10")
+    note = notes.parse("Dunloy\n1:00-1:10\nCamera two\n2:00-2:10")
     assert len(note.sections) == 2
     assert note.sections[1].tag == "part2"
+
+
+def test_video_lines_make_videos_from_the_same_halves():
+    note = notes.parse("Video Ballycastle\n1:00-1:10\n2nd half\n2:00-2:10\n"
+                       "2nd Video\n1:05-1:15\n2nd half\n2:05-2:15")
+    assert note.groups == ["Video Ballycastle", "2nd Video"]
+    assert [s.tag for s in note.sections] == ["h1", "h2"]          # still just two recordings
+    assert [(c.line, c.group) for c in note.clips] == [(2, 0), (4, 0), (6, 1), (8, 1)]
+    # The same moment in two different videos isn't an overlap.
+    assert not note.problems
 
 
 def test_errors_carry_line_numbers_and_dont_stop_parsing():

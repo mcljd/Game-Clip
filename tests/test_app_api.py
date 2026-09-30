@@ -12,7 +12,8 @@ def test_read_note_is_json_friendly():
     r = Api().read_note(NOTE)
     assert r["title"] == "Test match" and r["clip_count"] == 3
     assert r["sections"][0]["clips"][0] == {
-        "start": "0:10", "end": "0:16", "length": "0:06", "label": "", "line": 2}
+        "start": "0:10", "end": "0:16", "length": "0:06", "label": "", "line": 2, "group": 0}
+    assert r["groups"] == []
 
 
 def test_check_asks_for_missing_videos():
@@ -127,10 +128,10 @@ def test_same_video_for_two_sections_is_flagged(videos, tmp_path):
     both = [str(videos["part1"]), str(videos["part2"])]
     api.set_videos(0, both)
     api.set_videos(1, both)
-    chk = api.check("0:01-0:03\n2nd Video\n0:04-0:06\n", str(tmp_path))
+    chk = api.check("0:01-0:03\n2nd Half\n0:04-0:06\n", str(tmp_path))
     shared = [p for p in chk["problems"] if p["line"] is None]
-    assert len(shared) == 2 and "1st Half and 2nd Video" in shared[0]["message"]
+    assert len(shared) == 2 and "1st Half and 2nd Half" in shared[0]["message"]
     assert chk["ready"]          # a warning, not a block
     api.set_videos(1, [str(videos["h2"])])
-    assert not [p for p in api.check("0:01-0:03\n2nd Video\n0:04-0:06\n", str(tmp_path))["problems"]
+    assert not [p for p in api.check("0:01-0:03\n2nd Half\n0:04-0:06\n", str(tmp_path))["problems"]
                 if p["line"] is None]

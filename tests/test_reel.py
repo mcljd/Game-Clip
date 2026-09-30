@@ -156,10 +156,43 @@ def test_join_key_compares_standard_rate_and_profile():
     assert a.join_key() != c.join_key()
 
 
-def test_duplicate_section_names_get_their_own_reels(videos, tmp_path):
-    note, jobs = _jobs("2nd half\n0:01-0:03\n2nd half\n0:04-0:06", [[videos["h1"]], [videos["h2"]]], tmp_path)
-    reels = reel.plan_reels(note, jobs, tmp_path, "T", halves=True)
-    assert [r.out.name for r in reels] == ["T - 2nd half.mp4", "T - 2nd half (2).mp4"]
+def test_duplicate_video_names_get_their_own_reels(videos, tmp_path):
+    note, jobs = _jobs("Video T\n0:01-0:03\n2nd Video\n0:04-0:06\n2nd Video\n0:07-0:09",
+                       [[videos["h1"]]], tmp_path)
+    reels = reel.plan_reels(note, jobs, tmp_path, "Video T", halves=True)
+    assert [r.out.name for r in reels] == [
+        "Video T.mp4", "Video T - 2nd Video.mp4", "Video T - 2nd Video (2).mp4"]
+
+
+BALLYCASTLE = """Video Ballycastle
+0:03-0:05
+0:40-0:44
+2nd Half
+0:10-0:13
+2nd Video
+0:20-0:22
+2nd half
+0:30-0:33 Goal
+"""
+
+
+@needs_ffmpeg
+def test_videos_that_mix_both_halves(videos, tmp_path):
+    # Real note shape: two recordings (the halves), two videos to make, each
+    # with clips from both halves in the order they're written.
+    note, jobs = _jobs(BALLYCASTLE, [[videos["h1"]], [videos["h2"]]], tmp_path)
+    assert [s.tag for s in note.sections] == ["h1", "h2"]
+    reels = reel.plan_reels(note, jobs, tmp_path, "Video Ballycastle", halves=True)
+    assert [r.out.name for r in reels] == ["Video Ballycastle.mp4", "Video Ballycastle - 2nd Video.mp4"]
+    assert [[(j.section_tag, j.clip.line) for j in r.jobs] for r in reels] == [
+        [("h1", 2), ("h1", 3), ("h2", 5)], [("h1", 7), ("h2", 9)]]
+    [whole] = reel.plan_reels(note, jobs, tmp_path, "Video Ballycastle", halves=False, whole=True)
+    assert [j.clip.line for j in whole.jobs] == [2, 3, 5, 7, 9]
+    results = reel.run_reels(reels, card_images={}, force=True, preset="ultrafast")
+    assert [r.status for r in results] == ["made", "made"], [r.error for r in results]
+    first, second = (_dur(r.reel.out) for r in results)
+    assert 9 - 0.3 <= first <= 9 + 3 * 2.1     # 2 + 4 + 3 s, plus keyframe lead-ins
+    assert 5 - 0.3 <= second <= 5 + 2 * 2.1
 
 
 @needs_ffmpeg
