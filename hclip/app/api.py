@@ -170,7 +170,7 @@ class Api:
             for r in reel.rows:
                 c = cut_of.get(id(r))
                 rows.append({
-                    "key": r.key, "position": r.position, "line": r.line,
+                    "key": r.key, "position": r.position, "line": r.line, "own_line": r.own_line,
                     "range": r.range_text, "text": r.text, "header": r.header,
                     "video": r.video, "chosen_by": r.chosen_by, "why": r.why,
                     "error": err_of.get(id(r), "") if r.video is not None or r.error else "",
@@ -229,8 +229,8 @@ class Api:
               out_dir: str, names: list[str] | None = None, cards: dict | None = None,
               card_seconds: float = 3.0) -> dict:
         """Cut every reel. ``names`` are the reels' file names (without
-        .mp4); ``cards`` maps a note line (a string, from JS) to the PNG of
-        its text screen as base64."""
+        .mp4); ``cards`` maps a clip's key to the PNG of its text screen as
+        base64."""
         # Claim the run under the lock first, so a double-click can't start two.
         with self._lock:
             if self._state.running:
@@ -247,13 +247,13 @@ class Api:
                              or r.name for i, r in enumerate(plan.reels)])
             jobs = [cutter.ReelJob(r.name, stems[i], [c for c in chk.cuts if c.row.reel == i])
                     for i, r in enumerate(plan.reels)]
-            card_images: dict[int, Path] = {}
+            card_images: dict[str, Path] = {}
             if cards:
                 card_dir = Path(tempfile.mkdtemp(prefix="gaa-cards-"))
-                for line, b64 in cards.items():
-                    path = card_dir / f"card_{int(line)}.png"
+                for n, (key, b64) in enumerate(cards.items()):
+                    path = card_dir / f"card_{n}.png"
                     path.write_bytes(base64.b64decode(b64.split(",")[-1]))
-                    card_images[int(line)] = path
+                    card_images[key] = path
             videos = list(self._videos)
         except Exception as e:
             with self._lock:

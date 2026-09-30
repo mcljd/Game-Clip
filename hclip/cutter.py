@@ -115,7 +115,7 @@ def run(
     infos: Sequence[ffmpeg.MediaInfo],
     out_dir: Path,
     *,
-    cards: Mapping[int, Path] | None = None,     # note line -> PNG of its text screen
+    cards: Mapping[str, Path] | None = None,     # clip key -> PNG of its text screen
     card_seconds: float = 3.0,
     work_root: Path | None = None,
     preset: str = "veryfast",
@@ -131,7 +131,7 @@ def run(
     work.mkdir(parents=True)
 
     def card_for(cut: clipplan.Cut) -> Path | None:
-        img = cards.get(cut.row.line) if cut.row.text.strip() else None
+        img = cards.get(cut.row.key) if cut.row.text.strip() else None
         return img if img and img.read_bytes()[:8] == _PNG_MAGIC else None
 
     # Progress is measured in seconds of video to make.

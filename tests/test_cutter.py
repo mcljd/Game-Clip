@@ -91,9 +91,9 @@ def test_text_screens_go_before_their_clip(videos, tmp_path):
                     "-frames:v", "1", str(png)], check=True)
     srcs = [videos["h1"], videos["h2"]]
     jobs = _jobs(NOTE, srcs)
-    line = next(c.row.line for c in jobs[0].cuts if c.row.text)
+    key = next(c.row.key for c in jobs[0].cuts if c.row.text)
     [first, _] = cutter.run(jobs, srcs, LABELS, [ffmpeg.probe(v) for v in srcs], tmp_path / "out",
-                            cards={line: png}, card_seconds=2, preset="ultrafast")
+                            cards={key: png}, card_seconds=2, preset="ultrafast")
     assert first.ok, cutter.summary([first])
     assert abs(first.measured - (3 + 5 + 4 + 2)) < 0.2       # three clips plus one 2 s screen
     assert abs(ffmpeg.probe(tmp_path / "out" / "bc clip 1 - 02.mp4").duration - 5) < 0.1  # clip file has no screen

@@ -29,9 +29,13 @@ from hclip import timecode
 from hclip.notes import split_lines
 
 _TIME = r"\d{1,3}[:.]\d{2}(?:[:.]\d{2})?"
-_RANGE_RE = re.compile(
-    rf"^\s*({_TIME})\s*(?:-+|–|—|to)\s*({_TIME})\s*[-–—:,]?\s*(.*?)\s*$", re.IGNORECASE)
-_TIMEISH_RE = re.compile(r"^\s*\d{1,3}[:.]\d")
+# Dashes phones put in: hyphen, en/em dash, minus sign, non-breaking hyphens; or "to".
+_PAIR_RE = re.compile(rf"({_TIME})\s*(?:-+|[–—−‐‑]|\bto\b)\s*({_TIME})", re.IGNORECASE)
+_TIME_START_RE = re.compile(rf"^\s*{_TIME}")          # a line (or leftover) that starts with a time
+_TIMEISH_RE = re.compile(r"^\s*\d{1,3}[:.]\d")        # ...or looks like it was meant to
+# List markers phones add: "- ", "• ", "* ", "1. ", "2) ", checkboxes.
+_BULLET_RE = re.compile(r"^\s*(?:[-–—•*·◦○●▪■□☐☑✓✔>]+|\d{1,2}[.)](?=\s))\s*")
+_SEPARATORS = " \t-–—:,;|"
 
 # Ordinals as people type them (and a few common slips).
 _FIRST = {"1st", "1", "first", "one", "frist", "fisrt", "1rst", "1sr"}
@@ -39,6 +43,9 @@ _SECOND = {"2nd", "2", "second", "two", "secnd", "seccond", "secound", "2n", "2n
 
 
 def _words(text: str) -> list[str]:
+    # "1sthalf" / "2ndHalf" -> "1st half"; "H2" / "2H" -> "2nd half".
+    text = re.sub(r"(?i)(1st|2nd|first|second)(?=half)", r"\1 ", text)
+    text = re.sub(r"(?i)\b(?:h([12])|([12])h)\b", lambda m: f"{'1st' if (m[1] or m[2]) == '1' else '2nd'} half", text)
     return re.findall(r"[a-z0-9]+", text.lower())
 
 
@@ -63,7 +70,8 @@ def period_key(text: str) -> tuple[str, int | None] | None:
     ("half", 2), ("et", 1), ("et", 2), ("pens", None), ("half", None) when it
     doesn't say which half; None if it doesn't name a half at all.
     Typos are tolerated in "half" but never in which one (1st/2nd): a slip
-    there could pick the wrong video."""
+    there could pick the wrong video. A line that's just "1st" or "2nd"
+    names that half."""
     words = _words(text)
     joined = " ".join(words)
     if any(w.startswith("penalt") or w == "pens" for w in words):
@@ -83,16 +91,35 @@ def period_key(text: str) -> tuple[str, int | None] | None:
         return ("et", which)
     if any(_near(w, "half") or w in ("haf", "hlf") for w in words):
         return ("half", which)
+    if words in (["1st"], ["first"], ["2nd"], ["second"]):
+        return ("half", which)
     return None
 
 
-def _is_reel_header(words: list[str]) -> bool:
-    return bool(words) and (words[0] in ("reel", "reeel", "rell") or "reel" in words)
-
-
-def _is_old_video_header(words: list[str]) -> bool:
-    # "2nd Video", "Video Ballycastle": how the coach's earlier notes started a reel.
-    return "video" in words
+def reel_header(line: str) -> str | None:
+    """The reel's name if this line starts one: "reel 2", "Reel 6 - forwards",
+    "bc clip 1", "2nd Video", "Video Ballycastle". None otherwise. ("2nd
+    Half Video" names a half, not a reel.)"""
+    words = _words(line)
+    joined = " ".join(words)
+    m = re.match(r"^(?:reel|reeel|rell)\s*(\d+)\b(.*)$", joined)
+    if m:
+        rest = re.sub(r"\b(videos?)\b", "", m[2])
+        rest_raw = re.sub(r"(?i)^\W*(?:reel|reeel|rell)\s*\d+\W*|\bvideos?\b", "", line).strip(_SEPARATORS)
+        if not rest.strip() or period_key(rest) is not None:
+            return f"reel {int(m[1])}"
+        return f"reel {int(m[1])} - {rest_raw}"
+    if joined.startswith(("reel", "reeel", "rell")) and len(words) <= 3:
+        return line.strip(_SEPARATORS) or "reel"
+    if len(words) <= 4 and re.search(r"\bclips?\s*\d+$", joined):   # "Clip 2", "bc clip 1"
+        return line.strip(_SEPARATORS)
+    # The coach's older notes: "2nd Video", "Video 3" start a reel. (A video
+    # named before any clips, like "Video Ballycastle", is handled in parse().)
+    if period_key(line) is None and re.fullmatch(
+            r"(?:\d+(?:st|nd|rd|th)?|first|second|third|fourth|fifth|next|another)\s+videos?"
+            r"|videos?\s*(?:\d+|one|two|three|four|five)", joined):
+        return line.strip(_SEPARATORS)
+    return None
 
 
 def match_video(header: str, labels: Sequence[str]) -> tuple[int | None, str]:
@@ -125,13 +152,14 @@ class Row:
     start: float | None       # None when the time couldn't be read
     end: float | None
     range_text: str           # "3:10-3:34", as the key for the coach's choice
-    text: str                 # words after the range: the text screen
+    text: str                 # words with the range: the text screen
     header: str | None        # the half header above it in this reel
     video: int | None = None  # index into the videos, or None
     chosen_by: str = ""       # "note" (pre-filled), "you" (picked by hand), ""
     why: str = ""             # why it's unselected, for the highlight
     error: str = ""           # a problem that blocks cutting (bad time, end<=start)
     key: str = ""
+    own_line: bool = True     # the only clip on its line, written "range text": its text can be edited in place
 
     @property
     def length(self) -> float | None:
@@ -144,6 +172,7 @@ class Row:
 class Reel:
     name: str
     rows: list[Row] = field(default_factory=list)
+    key_name: str = ""        # the name, made unique ("reel 1 (2)"), for choice keys
 
 
 @dataclass
@@ -161,13 +190,15 @@ class Plan:
         return [r for r in self.rows if r.video is None]
 
 
-def choice_key(reel: int, range_text: str, repeat: int) -> str:
+def choice_key(reel: str, range_text: str, repeat: int) -> str:
+    """Keyed by the reel's name, not its number, so adding a reel above
+    doesn't move choices onto another reel's clips."""
     return f"{reel}|{range_text}|{repeat}"
 
 
 def describe_key(key: str) -> str:
-    reel, rng, repeat = key.split("|")
-    return f"reel {int(reel) + 1} · {rng}" + (f" (repeat {int(repeat) + 1})" if int(repeat) else "")
+    reel, rng, repeat = key.rsplit("|", 2)
+    return f"{reel} · {rng}" + (f" (repeat {int(repeat) + 1})" if int(repeat) else "")
 
 
 def parse(text: str, labels: Sequence[str],
@@ -190,48 +221,87 @@ def parse(text: str, labels: Sequence[str],
             reels[-1].name = name        # a header naming the reel before its clips
         current, header, why = None, None, "no half header above it"
 
-    for lineno, raw in enumerate(split_lines(text), start=1):
-        line = raw.strip()
-        if not line:
-            continue
-        m = _RANGE_RE.match(line)
-        if m:
-            start_s, end_s, label = m.groups()
-            reel_i = len(reels) - 1
-            rng = f"{start_s}-{end_s}"
-            row = Row(reel_i, len(reels[-1].rows) + 1, lineno, None, None, rng, label, header)
-            try:
+    def set_half(line: str) -> None:
+        nonlocal current, header, why
+        header = line
+        current, why = match_video(line, labels)
+
+    def is_half_header(line: str) -> bool:
+        words = _words(line)
+        return period_key(line) is not None or any(
+            words and " ".join(_words(lab)) == " ".join(words) for lab in labels)
+
+    def header_line(line: str) -> bool:
+        """Apply a reel and/or half header; False if the line is neither."""
+        name = reel_header(line)
+        if name is None and "video" in _words(line) and period_key(line) is None \
+                and not any(r.rows for r in reels):
+            name = line.strip(_SEPARATORS)          # "Video Ballycastle" above the first clip
+        if name is not None:
+            start_reel(name)
+            rest = re.sub(r"(?i)^\W*(?:reel|reeel|rell)\s*\d+", "", line)
+            if period_key(rest) is not None and re.match(r"(?i)^\W*(?:reel|reeel|rell)\s*\d+", line):
+                set_half(rest.strip(_SEPARATORS))    # "Reel 2 - 2nd half"
+            return True
+        if is_half_header(line):
+            set_half(line.strip(_SEPARATORS))
+            return True
+        return False
+
+    names_used: dict[str, int] = {}
+
+    def add_row(lineno: int, start_s: str, end_s: str, label: str, error: str = "",
+                own_line: bool = True, range_text: str = "") -> None:
+        reel_i = len(reels) - 1
+        reel = reels[-1]
+        if not reel.key_name:
+            n = names_used[reel.name.lower()] = names_used.get(reel.name.lower(), 0) + 1
+            reel.key_name = reel.name.lower() if n == 1 else f"{reel.name.lower()} ({n})"
+        rng = range_text or f"{start_s}-{end_s}"
+        row = Row(reel_i, len(reels[-1].rows) + 1, lineno, None, None, rng, label, header,
+                  own_line=own_line)
+        try:
+            if start_s:
                 row.start, row.end = timecode.parse(start_s), timecode.parse(end_s)
                 if row.end <= row.start:
                     row.error = f"ends ({end_s}) before it starts ({start_s})"
-            except timecode.TimecodeError as e:
-                row.error = str(e)
-            n = seen.get(f"{reel_i}|{rng}", 0)
-            seen[f"{reel_i}|{rng}"] = n + 1
-            row.key = choice_key(reel_i, rng, n)
-            row.video, row.chosen_by = (current, "note") if current is not None else (None, "")
-            row.why = "" if current is not None else why
-            reels[-1].rows.append(row)
+        except timecode.TimecodeError as e:
+            row.error = str(e)
+        row.error = error or row.error
+        n = seen.get(f"{reel.key_name}|{rng}", 0)
+        seen[f"{reel.key_name}|{rng}"] = n + 1
+        row.key = choice_key(reel.key_name, rng, n)
+        row.video, row.chosen_by = (current, "note") if current is not None else (None, "")
+        row.why = "" if current is not None else why
+        reels[-1].rows.append(row)
+
+    for lineno, raw in enumerate(split_lines(text), start=1):
+        line = _BULLET_RE.sub("", raw, count=1).strip() if _BULLET_RE.match(raw) else raw.strip()
+        if not line:
+            continue
+        pairs = list(_PAIR_RE.finditer(line))
+        if pairs:
+            before = line[:pairs[0].start()].strip(_SEPARATORS)
+            label_before = ""
+            if before and not header_line(before):
+                label_before = before                     # "Goal 3:43-4:01"
+            simple = len(pairs) == 1 and not before
+            for i, m in enumerate(pairs):
+                end = pairs[i + 1].start() if i + 1 < len(pairs) else len(line)
+                after = line[m.end():end].strip(_SEPARATORS)
+                error = ""
+                if _TIME_START_RE.match(after):             # "3:43-4:01-4:10"
+                    error = f"has more than two times (“{line}”). Write one range per line, like 3:43-4:01"
+                label = " ".join(x for x in (label_before if i == 0 else "", after) if x)
+                add_row(lineno, m[1], m[2], label, error, own_line=simple)
             continue
         if _TIMEISH_RE.match(line):
+            # Meant to be a clip but can't be read: keep it as a row that blocks Cut.
+            add_row(lineno, "", "", "", f"couldn't read “{line}”. Write it like 3:43-4:01",
+                    range_text=line)
+            continue
+        if not header_line(line):
             ignored.append((lineno, line))
-            continue
-        words = _words(line)
-        if _is_reel_header(words):
-            num = re.search(r"\breel\s*(\d+)", " ".join(words))
-            start_reel(f"reel {num.group(1)}" if num else line)
-            if period_key(line) is None:
-                continue                 # "reel 2 Video" is just reel 2
-        key = period_key(line)
-        label_hit = any(" ".join(_words(lab)) == " ".join(words) for lab in labels if words)
-        if key is not None or label_hit:
-            header = line
-            current, why = match_video(line, labels)
-            continue
-        if _is_old_video_header(words):
-            start_reel(line)
-            continue
-        ignored.append((lineno, line))
 
     reels = [r for r in reels if r.rows]
     plan = Plan(reels, ignored)

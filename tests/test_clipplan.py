@@ -124,8 +124,8 @@ def test_old_style_video_lines_start_reels():
 
 
 def test_ignored_lines_are_listed():
-    plan = clipplan.parse("Ballycastle clips\n1st half\n1:00-1:10\ngood hook here\n3:05-\n", LABELS)
-    assert plan.ignored == [(1, "Ballycastle clips"), (4, "good hook here"), (5, "3:05-")]
+    plan = clipplan.parse("Ballycastle clips\n1st half\n1:00-1:10\ngood hook here\n", LABELS)
+    assert plan.ignored == [(1, "Ballycastle clips"), (4, "good hook here")]
 
 
 def test_tolerates_crlf_blank_lines_dashes_and_hours():

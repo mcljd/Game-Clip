@@ -146,3 +146,32 @@ def test_many_videos_use_a_dropdown(window, videos):
     paste(page, "0:01-0:03")
     assert page.locator("#reels select[data-key]").count() == 1
     assert page.locator("#reels input[type=radio]").count() == 0
+
+
+def test_messy_note_in_the_window(window):
+    page, tmp = window
+    paste(page, "Ballycastle v Cushendall\nreel3\nH1\n- 0:10-0:12\nGoal 0:20-0:22\n"
+                "2nd half 0:05-0:07 wide\n0:30-0:32, 0:35-0:37\n0:5-0:07\n")
+    assert page.locator(".reel-head strong").all_inner_texts() == ["reel 3"]
+    assert checked_videos(page) == ["1st half", "1st half", "2nd half", "2nd half", "2nd half", "2nd half"]
+    assert page.locator("#reels tr.bad").count() == 1                  # "0:5-0:07"
+    assert "Line 1: “Ballycastle v Cushendall”" in page.inner_text("#noteNotes")
+    # Text can be edited in place only for a clip alone on a plain line; a list marker is kept.
+    editable = page.eval_on_selector_all("#reels input.text", "els => els.map(e => !e.disabled)")
+    assert editable == [True, False, False, False, False, True]
+    page.fill("#reels input.text >> nth=0", "Point")
+    page.wait_for_timeout(400)
+    assert page.input_value("#note").splitlines()[3] == "- 0:10-0:12 Point"
+
+
+def test_two_clips_on_one_line_get_their_own_text_screens(window, tmp_path):
+    page, tmp = window
+    paste(page, "1st half\n0:10-0:12 goal, 0:20-0:22 point\n")
+    page.fill("#outDir", str(tmp / "out"))
+    page.wait_for_function("!document.getElementById('cut').disabled")
+    page.click("#cut")
+    page.wait_for_selector("#done:not([hidden])", timeout=120_000)
+    assert page.inner_text("#doneTitle") == "1 reel made and checked"
+    # 2 clips of 3 s (1 s pad) + two 3 s text screens.
+    reel_len = page.eval_on_selector("#results tr.reelrow td:nth-child(3)", "e => e.textContent")
+    assert reel_len.startswith("12.0")

@@ -75,6 +75,20 @@ slower, so a 5-minute half can take 5-10 minutes. Phone reels are made at
    length. You get each reel (named as you like, e.g. `bc clip 1.mp4`) and
    its clips (`bc clip 1 - 01.mp4` …) in the folder you chose.
 
+**What the timings box understands** (all tested in `tests/test_clipplan_inputs.py`):
+
+| You type | It means |
+|---|---|
+| `reel 2`, `Reel 2:`, `reel2`, `Reel 6 - forwards`, `bc clip 2`, `2nd Video`, `Video 3` | start another reel |
+| `1st half`, `First Half`, `1sthalf`, `H1`, `1H`, `1st`, `half one`, `1st hlaf` | the next clips come from the 1st half's video (same for 2nd) |
+| `half time`, `2md half`, no header at all | not guessed: the clips are highlighted for you to choose |
+| `3:43-4:01`, `3.43-4.01`, `3:43 – 4:01`, `3:43 to 4:01`, `1:02:03-1:02:30` | a clip |
+| `- 3:43-4:01`, `• …`, `1. …`, `2) …`, `☐ …` | a clip (list markers are fine) |
+| `3:43-4:01 Point - Conor`, `Goal 3:43-4:01`, `2nd half 3:10-3:34 wide` | a clip with a text screen (and a half header on the same line) |
+| `3:43-4:01 goal, 5:00-5:10 point` | two clips |
+| `3:43-4:1`, `3:43-`, `1:75-2:00`, `4:01-3:43`, `8:05-8:21 19:03` | a red row that stops Cut until you fix it |
+| anything else (titles, notes) | listed under the box as "not understood" |
+
 Save to a folder on the laptop rather than in OneDrive if you can: writing
 big files into OneDrive can be very slow. (The videos are made on the laptop
 first either way.) A video that's "online only" in OneDrive is flagged: set it
