@@ -89,7 +89,7 @@ def period_key(text: str) -> tuple[str, int | None] | None:
         if et and et.group(1):
             which = int(et.group(1))
         return ("et", which)
-    if any(_near(w, "half") or w in ("haf", "hlf") for w in words):
+    if any(_near(w, "half") or w in ("haf", "hlf", "hf") for w in words):
         return ("half", which)
     if words in (["1st"], ["first"], ["2nd"], ["second"]):
         return ("half", which)
@@ -302,6 +302,10 @@ def parse(text: str, labels: Sequence[str],
             continue
         if not header_line(line):
             ignored.append((lineno, line))
+            if any(w in _FIRST | _SECOND for w in _words(line)):
+                # Probably a half header we can't read ("2nd hfl"): don't keep
+                # pre-filling the clips under it with the previous half.
+                current, header, why = None, line, f"couldn't tell which half “{line}” means"
 
     reels = [r for r in reels if r.rows]
     plan = Plan(reels, ignored)

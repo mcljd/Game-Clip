@@ -28,6 +28,11 @@ CASES = {
         "1sthalf\n1:00-1:10\n2ndHalf\n1:20-1:30\nH1\n1:40-1:50\nH2\n2:00-2:10\n1H\n2:20-2:30\n"
         "2h\n2:40-2:50\n1st\n3:00-3:10\n2nd\n3:20-3:30",
         [H1, H2, H1, H2, H1, H2, H1, H2], []),
+    "a coach's real shorthand: '2nd Hf'": (
+        "1st half\n1:00-1:10\n2nd Hf\n1:20-1:30", [H1, H2], []),
+    "an unreadable half line stops the previous half carrying on": (
+        "1st half\n1:00-1:10\n2nd hxyz\n1:20-1:30\n1st half\n1:40-1:50",
+        [H1, NONE, H1], ["2nd hxyz"]),
     "typos in 'half' are fine": (
         "1st hlaf\n1:00-1:10\n2nd haf\n1:20-1:30\nsecnd half\n1:40-1:50\n1st hallf\n2:00-2:10\nfrist half\n2:20-2:30",
         [H1, H2, H2, H1, H1], []),
