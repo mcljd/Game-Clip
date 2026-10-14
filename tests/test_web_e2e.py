@@ -150,8 +150,8 @@ def test_stop_then_carry_on(phone, videos):
     pick(page, 0, videos["h1"])
     page.wait_for_timeout(400)
     page.click("#goHalves")
+    # Stop as soon as it starts: a fixed wait raced the run on a fast machine.
     page.wait_for_selector("#running:not([hidden])")
-    page.wait_for_timeout(2500)
     page.click("#stop")
     wait_status(page, "Stopped")
     assert page.locator("#clipList li").count() == 0
@@ -190,21 +190,19 @@ def test_videos_that_mix_both_halves(phone, videos, tmp_path):
 
 
 def test_leftover_parts_are_cleared_when_timings_change(phone, videos):
+    # A part left by an earlier, stopped run whose timings have since changed
+    # (put in storage directly: stopping a real run mid-way raced the run).
     page = phone
-    page.fill("#note", "0:00-0:55 Long one\n0:56-0:59\n")
+    page.evaluate("""async () => { const t = new ClipTray(); await t.init();
+        await t.put({ key: 'piece:old-timings', kind: 'piece', name: 'old.mp4', match: 'x',
+                      blob: new Blob([new Uint8Array(10)], { type: 'video/mp4' }), size: 10 }); }""")
+    assert piece_count(page) == 1
+    page.fill("#note", "0:10-0:15 Different\n")
     pick(page, 0, videos["h1"])
-    page.wait_for_timeout(300)
-    page.click("#goHalves")
-    page.wait_for_selector("#running:not([hidden])")
-    page.wait_for_timeout(2500)
-    page.click("#stop")
-    wait_status(page, "Stopped")
-    assert piece_count(page) >= 1                 # kept so it can carry on
-    page.fill("#note", "0:10-0:15 Different\n")   # coach changes the timings
     page.wait_for_timeout(400)
     page.click("#goHalves")
     wait_status(page, "Done: 1 video made")
-    assert piece_count(page) == 0                 # old parts gone, new ones tidied
+    assert piece_count(page) == 0                 # the old part is gone, the new ones tidied
 
 
 def test_joined_half_clips_are_their_own_length(phone, videos, tmp_path):
