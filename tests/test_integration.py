@@ -7,7 +7,7 @@ pytestmark = [pytest.mark.integration, needs_ffmpeg]
 
 NOTE = """Test match
 0:10-0:16
-0:31-0:40 Goal - Seán
+0:31-0:40 Goal - Cúl báire
 2nd half
 0:05-0:12
 """
@@ -31,7 +31,7 @@ def test_cut_names_durations_and_resume(videos, tmp_path):
     p, results = _cut(NOTE, [[videos["h1"]], [videos["h2"]]], tmp_path)
     assert [r.status for r in results] == ["made"] * 3
     names = sorted(f.name for f in tmp_path.iterdir())
-    assert names == ["01_h1_00m10-00m16.mp4", "02_h1_00m31-00m40_goal_sean.mp4",
+    assert names == ["01_h1_00m10-00m16.mp4", "02_h1_00m31-00m40_goal_cul_baire.mp4",
                      "03_h2_00m05-00m12.mp4"]
     # Stream copy snaps to the keyframe at/before start (2s GOP here), so the
     # clip may begin up to one GOP early, never late.

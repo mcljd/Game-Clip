@@ -62,7 +62,7 @@ def plan_reels(note: Note, jobs: Sequence[Job], out_dir: Path, title: str, *,
                halves: bool = True, whole: bool = False) -> list[Reel]:
     reels: list[Reel] = []
     if halves:
-        # One reel per video the note names ("Video Ballycastle", "2nd Video"),
+        # One reel per video the note names ("Video Final", "2nd Video"),
         # each mixing both halves; otherwise one per half.
         if note.groups:
             parts = [(name, [j for j in jobs if j.clip.group == g])

@@ -6,7 +6,7 @@ import pytest
 from hclip import cut, ffmpeg, notes, reel
 from tests.conftest import make_video, needs_ffmpeg
 
-NOTE = "Test match\n0:10-0:16\n0:31-0:40 Goal - Seán\n2nd half\n0:05-0:12 Point\n"
+NOTE = "Test match\n0:10-0:16\n0:31-0:40 Goal - Cúl báire\n2nd half\n0:05-0:12 Point\n"
 
 
 def _jobs(note_text, halves, out):
@@ -31,7 +31,7 @@ def black_card(path: Path, size="320x180") -> Path:
 
 
 def test_reel_names_are_windows_safe():
-    assert reel.reel_filename("Dunloy v Loughgiel", "1st Half") == "Dunloy v Loughgiel - 1st Half.mp4"
+    assert reel.reel_filename("Home v Away", "1st Half") == "Home v Away - 1st Half.mp4"
     assert reel.reel_filename('A/B: "final"', "2nd Half?") == "A_B_ _final_ - 2nd Half_.mp4"
     assert reel.reel_filename("", "Whole match") == "Match - Whole match.mp4"
 
@@ -164,7 +164,7 @@ def test_duplicate_video_names_get_their_own_reels(videos, tmp_path):
         "Video T.mp4", "Video T - 2nd Video.mp4", "Video T - 2nd Video (2).mp4"]
 
 
-BALLYCASTLE = """Video Ballycastle
+MIXED_HALVES = """Video Final
 0:03-0:05
 0:40-0:44
 2nd Half
@@ -180,13 +180,13 @@ BALLYCASTLE = """Video Ballycastle
 def test_videos_that_mix_both_halves(videos, tmp_path):
     # Real note shape: two recordings (the halves), two videos to make, each
     # with clips from both halves in the order they're written.
-    note, jobs = _jobs(BALLYCASTLE, [[videos["h1"]], [videos["h2"]]], tmp_path)
+    note, jobs = _jobs(MIXED_HALVES, [[videos["h1"]], [videos["h2"]]], tmp_path)
     assert [s.tag for s in note.sections] == ["h1", "h2"]
-    reels = reel.plan_reels(note, jobs, tmp_path, "Video Ballycastle", halves=True)
-    assert [r.out.name for r in reels] == ["Video Ballycastle.mp4", "Video Ballycastle - 2nd Video.mp4"]
+    reels = reel.plan_reels(note, jobs, tmp_path, "Video Final", halves=True)
+    assert [r.out.name for r in reels] == ["Video Final.mp4", "Video Final - 2nd Video.mp4"]
     assert [[(j.section_tag, j.clip.line) for j in r.jobs] for r in reels] == [
         [("h1", 2), ("h1", 3), ("h2", 5)], [("h1", 7), ("h2", 9)]]
-    [whole] = reel.plan_reels(note, jobs, tmp_path, "Video Ballycastle", halves=False, whole=True)
+    [whole] = reel.plan_reels(note, jobs, tmp_path, "Video Final", halves=False, whole=True)
     assert [j.clip.line for j in whole.jobs] == [2, 3, 5, 7, 9]
     results = reel.run_reels(reels, card_images={}, force=True, preset="ultrafast")
     assert [r.status for r in results] == ["made", "made"], [r.error for r in results]

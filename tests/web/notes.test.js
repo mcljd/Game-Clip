@@ -29,21 +29,21 @@ test("messages match the Python wording", () => {
 test("filenames match the Python app", () => {
   assert.equal(Notes.clipFilename(1, 15, "h1", 112, 130), "01_h1_01m52-02m10.mp4");
   assert.equal(Notes.clipFilename(3, 120, "h2", 185, 213, "Goal!"), "003_h2_03m05-03m33_goal.mp4");
-  assert.equal(Notes.slugify("Seán Ó Dónaill!"), "sean_o_donaill");
+  assert.equal(Notes.slugify("Cúl ó phoc saor!"), "cul_o_phoc_saor");
   assert.equal(Notes.fmt(3723), "1:02:03");
 });
 
 test("setLabel writes the text into that line only", () => {
-  const note = "Dunloy clips\n1:52 - 2:10\n3:05–3:33 old text\n2nd Half Video\n3:04-3:37";
-  let t = Notes.setLabel(note, 2, "Point - Conor");
-  assert.equal(t.split("\n")[1], "1:52 - 2:10 Point - Conor");
+  const note = "Match clips\n1:52 - 2:10\n3:05–3:33 old text\n2nd Half Video\n3:04-3:37";
+  let t = Notes.setLabel(note, 2, "Point - No 11");
+  assert.equal(t.split("\n")[1], "1:52 - 2:10 Point - No 11");
   t = Notes.setLabel(t, 3, "Goal");
   assert.equal(t.split("\n")[2], "3:05–3:33 Goal");
   t = Notes.setLabel(t, 3, "  ");
   assert.equal(t.split("\n")[2], "3:05–3:33");
   assert.equal(Notes.setLabel(t, 4, "x"), t);             // not a clip line
-  const n = Notes.parse(Notes.setLabel(note, 2, "Point - Conor"));
-  assert.equal(n.sections[0].clips[0].label, "Point - Conor");
+  const n = Notes.parse(Notes.setLabel(note, 2, "Point - No 11"));
+  assert.equal(n.sections[0].clips[0].label, "Point - No 11");
   assert.equal(Notes.setLabel("1:00-1:10\r\n2:00-2:10", 2, "a"), "1:00-1:10\r\n2:00-2:10 a");
 });
 

@@ -102,9 +102,9 @@ def test_half_reels_with_text_screens_then_one_video(phone, videos, tmp_path):
     assert "1:75" in page.inner_text("#noteProblems")
     assert not page.is_visible("#folderOpt")  # laptop-only option
     # Type a text screen for the first clip in the list; it's written into the note.
-    page.fill("[data-line='2']", "Point - Conor")
+    page.fill("[data-line='2']", "Point - No 11")
     page.wait_for_timeout(400)
-    assert page.input_value("#note").splitlines()[1] == "0:10-0:16 Point - Conor"
+    assert page.input_value("#note").splitlines()[1] == "0:10-0:16 Point - No 11"
     pick(page, 0, videos["h1"])
     pick(page, 1, videos["h2"])
     page.wait_for_function("!document.getElementById('goHalves').disabled")

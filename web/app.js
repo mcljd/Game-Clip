@@ -150,7 +150,7 @@
 
   function renderPreview(text) {
     previewText = text;
-    window.Cards.drawCard($("preview"), text || "Point from play - Conor");
+    window.Cards.drawCard($("preview"), text || "Point from play - No 11");
   }
 
   function renderTextList() {
@@ -544,7 +544,7 @@
       $("banner").hidden = false;
       $("banner").textContent = "This browser can't run the video tools. Use Safari on iPhone, or Chrome or Edge on a computer.";
     }
-    $("note").placeholder = "Paste the timings from your phone's Notes, e.g.\n\nDunloy clips\n1:52-2:10\n3:05-3:33 Point from play - Conor\n\n2nd Half Video\n3:04-3:37";
+    $("note").placeholder = "Paste the timings from your phone's Notes, e.g.\n\nMatch clips\n1:52-2:10\n3:05-3:33 Point from play - No 11\n\n2nd Half Video\n3:04-3:37";
     $("note").value = store.get("gaa-clips-note");
     $("title").value = store.get("gaa-clips-title");
     titleEdited = !!$("title").value;

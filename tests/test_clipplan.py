@@ -117,15 +117,15 @@ def test_new_reel_forgets_the_last_half():
 
 
 def test_old_style_video_lines_start_reels():
-    note = "Video Ballycastle\n1st half\n3:43-4:01\n2nd Half\n3:10-3:34\n2nd Video\n1st half\n6:56-7:07"
+    note = "Video Final\n1st half\n3:43-4:01\n2nd Half\n3:10-3:34\n2nd Video\n1st half\n6:56-7:07"
     plan = clipplan.parse(note, LABELS)
-    assert [r.name for r in plan.reels] == ["Video Ballycastle", "2nd Video"]
+    assert [r.name for r in plan.reels] == ["Video Final", "2nd Video"]
     assert videos_of(plan) == [[0, 1], [0]]
 
 
 def test_ignored_lines_are_listed():
-    plan = clipplan.parse("Ballycastle clips\n1st half\n1:00-1:10\ngood hook here\n", LABELS)
-    assert plan.ignored == [(1, "Ballycastle clips"), (4, "good hook here")]
+    plan = clipplan.parse("Final clips\n1st half\n1:00-1:10\ngood hook here\n", LABELS)
+    assert plan.ignored == [(1, "Final clips"), (4, "good hook here")]
 
 
 def test_tolerates_crlf_blank_lines_dashes_and_hours():

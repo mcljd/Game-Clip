@@ -16,14 +16,14 @@ def test_default_labels():
 
 
 def test_safe_folder_keeps_coach_wording():
-    assert _safe_folder("Dunloy v Loughgiel clips") == "Dunloy v Loughgiel clips"
+    assert _safe_folder("Home v Away clips") == "Home v Away clips"
     assert _safe_folder('A/B: "final"?') == "A_B_ _final__"
 
 
 def test_onedrive_output_is_flagged():
     api = Api()
-    assert in_onedrive(r"C:\Users\Mcljd\OneDrive\Hurling Clips")
-    assert "OneDrive" in api.folder_note(r"C:\Users\Mcljd\OneDrive\Hurling Clips")
+    assert in_onedrive(r"C:\Users\Coach\OneDrive\Hurling Clips")
+    assert "OneDrive" in api.folder_note(r"C:\Users\Coach\OneDrive\Hurling Clips")
     assert api.folder_note(r"C:\Clips") == ""
     assert "onedrive" not in api.default_folder().lower()
 
@@ -93,14 +93,14 @@ def test_cut_like_the_window(videos, tmp_path):
     api.add_video_paths([str(videos["h1"]), str(videos["h2"])])
     p = api.plan(NOTE, {}, 0, 1)
     assert p["can_cut"], p["message"]
-    res = api.start(NOTE, {}, 0, 1, str(tmp_path), ["bc clip 1", "bc clip 2"])
+    res = api.start(NOTE, {}, 0, 1, str(tmp_path), ["game clip 1", "game clip 2"])
     assert res == {"ok": True}
     st = _wait(api)
     assert not st["error"] and [r["status"] for r in st["results"]] == ["made", "made"]
     assert all(r["ok"] for r in st["results"])
     assert [c["expected"] for c in st["results"][0]["clips"]] == [7, 8]
     assert sorted(p.name for p in tmp_path.iterdir()) == [
-        "bc clip 1 - 01.mp4", "bc clip 1 - 02.mp4", "bc clip 1.mp4", "bc clip 2 - 01.mp4", "bc clip 2.mp4"]
+        "game clip 1 - 01.mp4", "game clip 1 - 02.mp4", "game clip 1.mp4", "game clip 2 - 01.mp4", "game clip 2.mp4"]
 
 
 @needs_ffmpeg

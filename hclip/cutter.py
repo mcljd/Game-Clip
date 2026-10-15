@@ -39,7 +39,7 @@ _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 @dataclass
 class ReelJob:
     name: str                       # "reel 1", for progress and the results
-    file_stem: str                  # "bc clip 1": the reel is <stem>.mp4, clips <stem> - 01.mp4
+    file_stem: str                  # "game clip 1": the reel is <stem>.mp4, clips <stem> - 01.mp4
     cuts: list[clipplan.Cut]
 
 

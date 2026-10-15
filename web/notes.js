@@ -56,7 +56,7 @@
     return null;
   }
 
-  // A line naming an output video ("2nd Video", "Video Ballycastle"), as
+  // A line naming an output video ("2nd Video", "Video Final"), as
   // opposed to a half ("2nd Half Video" names a half). Same rule as notes.py.
   const isVideoHeader = (line) => /\bvideo\b/i.test(line) && sectionTag(line, 1) === null;
 
@@ -126,7 +126,7 @@
         groupHasClips = false;
         current = null;                                  // each video starts from the 1st half
       } else if (isVideoHeader(line) && title) {
-        // A video's name written before its first clip ("Dunloy" then "Video 1").
+        // A video's name written before its first clip ("Final" then "Video 1").
         if (group === 0) firstName = line; else groups[groups.length - 1] = line;
       } else if (!current && !title) {
         title = line;

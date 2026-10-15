@@ -14,7 +14,7 @@ LABELS = ["1st half", "2nd half"]
 NOTE = """reel 1
 1st half
 0:03-0:05
-0:40-0:44 Point - Conor
+0:40-0:44 Point - No 11
 2nd Half
 0:10-0:13
 
@@ -26,7 +26,7 @@ reel 2 Video
 """
 
 
-def _jobs(note, videos, pad_end=1.0, choices=None, names=("bc clip 1", "bc clip 2")):
+def _jobs(note, videos, pad_end=1.0, choices=None, names=("game clip 1", "game clip 2")):
     plan = clipplan.parse(note, LABELS, choices)
     chk = clipplan.check(plan, [ffmpeg.probe(v).duration for v in videos], pad_end=pad_end)
     assert chk.can_cut, chk.errors
@@ -53,10 +53,10 @@ def test_reels_mix_both_videos_in_order_and_verify(videos, tmp_path):
     assert [c.expected for c in results[0].clips] == [3, 5, 4]
     assert [c.expected for c in results[1].clips] == [3, 4]
     names = sorted(p.name for p in (tmp_path / "out").iterdir())
-    assert names == ["bc clip 1 - 01.mp4", "bc clip 1 - 02.mp4", "bc clip 1 - 03.mp4", "bc clip 1.mp4",
-                     "bc clip 2 - 01.mp4", "bc clip 2 - 02.mp4", "bc clip 2.mp4"]
+    assert names == ["game clip 1 - 01.mp4", "game clip 1 - 02.mp4", "game clip 1 - 03.mp4", "game clip 1.mp4",
+                     "game clip 2 - 01.mp4", "game clip 2 - 02.mp4", "game clip 2.mp4"]
     assert all(_decodes(tmp_path / "out" / n) for n in names)
-    reel = ffmpeg.probe(tmp_path / "out" / "bc clip 1.mp4")
+    reel = ffmpeg.probe(tmp_path / "out" / "game clip 1.mp4")
     assert (reel.video_codec, reel.audio_codec, reel.sample_rate) == ("h264", "aac", 48000)
     assert "reel 1, clip 3/3, 2nd half 0:10-0:13" in progress
     assert not list((tmp_path / "work").iterdir())            # temp work cleared
@@ -96,7 +96,7 @@ def test_text_screens_go_before_their_clip(videos, tmp_path):
                             cards={key: png}, card_seconds=2, preset="ultrafast")
     assert first.ok, cutter.summary([first])
     assert abs(first.measured - (3 + 5 + 4 + 2)) < 0.2       # three clips plus one 2 s screen
-    assert abs(ffmpeg.probe(tmp_path / "out" / "bc clip 1 - 02.mp4").duration - 5) < 0.1  # clip file has no screen
+    assert abs(ffmpeg.probe(tmp_path / "out" / "game clip 1 - 02.mp4").duration - 5) < 0.1  # clip file has no screen
 
 
 def test_missing_source_is_named_and_other_reels_still_made(videos, tmp_path):
@@ -109,7 +109,7 @@ def test_missing_source_is_named_and_other_reels_still_made(videos, tmp_path):
     r1, r2 = cutter.run(jobs, srcs, LABELS, infos, tmp_path / "out", preset="ultrafast")
     assert r1.status == "failed" and "“2nd half moved.mp4”" in r1.error and "2nd half" in r1.error
     assert r2.status == "made" and r2.ok
-    assert sorted(p.name for p in (tmp_path / "out").iterdir()) == ["bc clip 2 - 01.mp4", "bc clip 2.mp4"]
+    assert sorted(p.name for p in (tmp_path / "out").iterdir()) == ["game clip 2 - 01.mp4", "game clip 2.mp4"]
 
 
 def test_different_sources_are_encoded_to_one_format(videos, tmp_path):

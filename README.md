@@ -6,7 +6,7 @@ the list of timings a coach types into their phone.
 The coach writes something like this in Notes:
 
 ```
-Dunloy clips
+Match clips
 1:52-2:10
 3:05-3:33 point from play
 ...
@@ -18,14 +18,14 @@ Dunloy clips
 and gets highlight reels:
 
 ```
-Dunloy - 1st Half.mp4        (Make half reels)
-Dunloy - 2nd Half Video.mp4
-Dunloy - Whole match.mp4     (Make one video)
+Final - 1st Half.mp4        (Make half reels)
+Final - 2nd Half Video.mp4
+Final - Whole match.mp4     (Make one video)
 ```
 
 **Text screens:** text after a clip's time (or typed into the *Text before
 each clip* list) is shown on a black screen with white text before that
-clip, e.g. `3:05-3:33 Point from play - Conor`. Clips without text have no
+clip, e.g. `3:05-3:33 Point from play - No 11`. Clips without text have no
 screen. Tick *Also keep each clip separately* to get the single clips too.
 
 **How long it takes:** without text screens, reels are made by copying the
@@ -50,7 +50,7 @@ slower, so a 5-minute half can take 5-10 minutes. Phone reels are made at
    reel 1
    1st half
    3:43-4:01
-   11:26-11:40 Point - Conor
+   11:26-11:40 Point - No 11
    2nd Half
    3:10-3:34
 
@@ -72,19 +72,19 @@ slower, so a 5-minute half can take 5-10 minutes. Phone reels are made at
    can be set). Every clip is re-encoded so it starts exactly on time, the
    reel is joined in the order written, and every clip and reel is measured
    afterwards: the results table shows a tick for each one that's the right
-   length. You get each reel (named as you like, e.g. `bc clip 1.mp4`) and
-   its clips (`bc clip 1 - 01.mp4` …) in the folder you chose.
+   length. You get each reel (named as you like, e.g. `game clip 1.mp4`) and
+   its clips (`game clip 1 - 01.mp4` …) in the folder you chose.
 
 **What the timings box understands** (all tested in `tests/test_clipplan_inputs.py`):
 
 | You type | It means |
 |---|---|
-| `reel 2`, `Reel 2:`, `reel2`, `Reel 6 - forwards`, `bc clip 2`, `2nd Video`, `Video 3` | start another reel |
+| `reel 2`, `Reel 2:`, `reel2`, `Reel 6 - forwards`, `game clip 2`, `2nd Video`, `Video 3` | start another reel |
 | `1st half`, `First Half`, `1sthalf`, `H1`, `1H`, `1st`, `half one`, `1st hlaf` | the next clips come from the 1st half's video (same for 2nd) |
 | `half time`, `2md half`, no header at all | not guessed: the clips are highlighted for you to choose |
 | `3:43-4:01`, `3.43-4.01`, `3:43 – 4:01`, `3:43 to 4:01`, `1:02:03-1:02:30` | a clip |
 | `- 3:43-4:01`, `• …`, `1. …`, `2) …`, `☐ …` | a clip (list markers are fine) |
-| `3:43-4:01 Point - Conor`, `Goal 3:43-4:01`, `2nd half 3:10-3:34 wide` | a clip with a text screen (and a half header on the same line) |
+| `3:43-4:01 Point - No 11`, `Goal 3:43-4:01`, `2nd half 3:10-3:34 wide` | a clip with a text screen (and a half header on the same line) |
 | `3:43-4:01 goal, 5:00-5:10 point` | two clips |
 | `3:43-4:1`, `3:43-`, `1:75-2:00`, `4:01-3:43`, `8:05-8:21 19:03` | a red row that stops Cut until you fix it |
 | anything else (titles, notes) | listed under the box as "not understood" |
@@ -154,7 +154,7 @@ Things to know on iPhone:
 |---|---|
 | `1:52-2:10`, `1:52 - 2:10`, `1:52–2:10`, `1:52 to 2:10`, `1.52-2.10` | a clip |
 | `1:02:03-1:02:30` | a clip past the hour (whole-match file) |
-| `3:05-3:33 Goal Conor` | a clip labelled "Goal Conor" |
+| `3:05-3:33 Goal No 11` | a clip labelled "Goal No 11" |
 | `2nd Half`, `Second half video`, `Extra time 1`, `ET2`, `Penalties` | the next clips come from that half's video |
 | `2nd Video`, `Video 2` (a line with "video" but no half) | starts another video to make (see below) |
 | first text line before any clip | the match title |
@@ -167,7 +167,7 @@ match clock.
 both halves:
 
 ```
-Video Ballycastle
+Video Final
 3:43-4:01          <- 1st half
 2nd Half
 3:10-3:34          <- 2nd half
@@ -178,7 +178,7 @@ Video Ballycastle
 ```
 
 Choose one video per half as usual (here just two), and the first Make
-button makes `Video Ballycastle.mp4` and `Video Ballycastle - 2nd Video.mp4`,
+button makes `Video Final.mp4` and `Video Final - 2nd Video.mp4`,
 each with its clips in the order they're written.
 
 ## Command line
@@ -190,26 +190,26 @@ them).
 pip install -e ".[dev]"
 
 # Check the note first: lists every clip and any problems
-hclip check dunloy.txt
+hclip check sample_note.txt
 pbpaste | hclip check -          # straight from the clipboard on a Mac
 
 # Cut: one --half per section, in the note's order
-hclip cut dunloy.txt \
-  --half "Dunloy 1st half.mp4" \
-  --half "Dunloy 2nd half.mp4" \
-  --out "Dunloy clips"
+hclip cut sample_note.txt \
+  --half "Final 1st half.mp4" \
+  --half "Final 2nd half.mp4" \
+  --out "Match clips"
 
 # A half recorded as several GoPro files
-hclip cut dunloy.txt --half GX010123.MP4 GX020123.MP4 --half GX010124.MP4
+hclip cut sample_note.txt --half GX010123.MP4 GX020123.MP4 --half GX010124.MP4
 
 # Frame-accurate (slow)
-hclip cut dunloy.txt --half h1.mp4 --half h2.mp4 --precise
+hclip cut sample_note.txt --half h1.mp4 --half h2.mp4 --precise
 
 # Reels: one per half, or --whole for one video (text screens are app-only)
-hclip reel dunloy.txt --half h1.mp4 --half h2.mp4 --title "Dunloy" --out highlights
+hclip reel sample_note.txt --half h1.mp4 --half h2.mp4 --title "Final" --out highlights
 
 # Duration, codecs, keyframe spacing
-hclip info "Dunloy 1st half.mp4"
+hclip info "Final 1st half.mp4"
 ```
 
 ## Development

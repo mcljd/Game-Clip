@@ -2,7 +2,7 @@
 
 Example::
 
-    Dunloy clips
+    Match clips
     1:52-2:10
     3:05-3:33 point from play
 
@@ -11,7 +11,7 @@ Example::
 
 Some coaches make several videos from one match, each mixing both halves::
 
-    Video Ballycastle          <- title, and the name of the first video
+    Video Final          <- title, and the name of the first video
     3:43-4:01                  <- from the 1st half's recording
     2nd Half
     3:10-3:34                  <- from the 2nd half's recording
@@ -143,7 +143,7 @@ _VIDEO_RE = re.compile(r"\bvideo\b", re.IGNORECASE)
 
 
 def is_video_header(line: str) -> bool:
-    """A line naming an output video ("2nd Video", "Video Ballycastle"),
+    """A line naming an output video ("2nd Video", "Video Final"),
     as opposed to a half ("2nd Half Video" names a half)."""
     return bool(_VIDEO_RE.search(line)) and section_tag(line, 1) is None
 
@@ -231,7 +231,7 @@ def parse(text: str) -> Note:
             group_has_clips = False
             current = None               # each video starts from the 1st half
         elif is_video_header(line) and title:
-            # A video's name written before its first clip ("Dunloy" then "Video 1").
+            # A video's name written before its first clip ("Final" then "Video 1").
             if group == 0:
                 first_name = line
             else:

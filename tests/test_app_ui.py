@@ -83,14 +83,14 @@ def test_no_headers_means_every_row_highlighted_and_cut_blocked(window):
 
 def test_set_all_then_cut_and_see_checked_results(window):
     page, tmp = window
-    paste(page, "0:10-0:16\n0:20-0:25 Point - Conor\n0:05-0:08")
+    paste(page, "0:10-0:16\n0:20-0:25 Point - No 11\n0:05-0:08")
     assert page.locator("#reels tr.need").count() == 3 and page.is_disabled("#cut")
     page.select_option("[data-setall='0']", "0")
     page.wait_for_function("document.querySelectorAll('#reels tr.need').length === 0")
     assert checked_videos(page) == ["1st half"] * 3
     assert page.locator("#reels .yours").count() == 3
     page.fill("#outDir", str(tmp / "out"))
-    page.fill("[data-name='0']", "bc clip 1")
+    page.fill("[data-name='0']", "game clip 1")
     page.wait_for_function("!document.getElementById('cut').disabled")
     page.click("#cut")
     page.wait_for_selector("#done:not([hidden])", timeout=120_000)
@@ -98,7 +98,7 @@ def test_set_all_then_cut_and_see_checked_results(window):
     assert page.locator("#results .off").count() == 0
     assert page.locator("#results .ok").count() == 4          # 3 clips + the reel
     assert sorted(p.name for p in (tmp / "out").iterdir()) == [
-        "bc clip 1 - 01.mp4", "bc clip 1 - 02.mp4", "bc clip 1 - 03.mp4", "bc clip 1.mp4"]
+        "game clip 1 - 01.mp4", "game clip 1 - 02.mp4", "game clip 1 - 03.mp4", "game clip 1.mp4"]
 
 
 def test_select_several_rows_and_set_their_video(window):
@@ -130,12 +130,12 @@ def test_hand_choice_survives_editing_the_timings(window):
 
 def test_ignored_lines_are_listed_and_text_screens_write_into_the_note(window):
     page, _ = window
-    paste(page, "Ballycastle clips\n1st half\n0:10-0:16\nnice score\n")
-    assert "Line 1: “Ballycastle clips”" in page.inner_text("#noteNotes")
+    paste(page, "Final clips\n1st half\n0:10-0:16\nnice score\n")
+    assert "Line 1: “Final clips”" in page.inner_text("#noteNotes")
     assert "Line 4: “nice score”" in page.inner_text("#noteNotes")
-    page.fill("#reels [data-line='3']", "Point - Conor")
+    page.fill("#reels [data-line='3']", "Point - No 11")
     page.wait_for_timeout(400)
-    assert page.input_value("#note").splitlines()[2] == "0:10-0:16 Point - Conor"
+    assert page.input_value("#note").splitlines()[2] == "0:10-0:16 Point - No 11"
 
 
 def test_many_videos_use_a_dropdown(window, videos):
@@ -150,12 +150,12 @@ def test_many_videos_use_a_dropdown(window, videos):
 
 def test_messy_note_in_the_window(window):
     page, tmp = window
-    paste(page, "Ballycastle v Cushendall\nreel3\nH1\n- 0:10-0:12\nGoal 0:20-0:22\n"
+    paste(page, "Home v Away\nreel3\nH1\n- 0:10-0:12\nGoal 0:20-0:22\n"
                 "2nd half 0:05-0:07 wide\n0:30-0:32, 0:35-0:37\n0:5-0:07\n")
     assert page.locator(".reel-head strong").all_inner_texts() == ["reel 3"]
     assert checked_videos(page) == ["1st half", "1st half", "2nd half", "2nd half", "2nd half", "2nd half"]
     assert page.locator("#reels tr.bad").count() == 1                  # "0:5-0:07"
-    assert "Line 1: “Ballycastle v Cushendall”" in page.inner_text("#noteNotes")
+    assert "Line 1: “Home v Away”" in page.inner_text("#noteNotes")
     # Text can be edited in place only for a clip alone on a plain line; a list marker is kept.
     editable = page.eval_on_selector_all("#reels input.text", "els => els.map(e => !e.disabled)")
     assert editable == [True, False, False, False, False, True]

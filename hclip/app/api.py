@@ -328,7 +328,7 @@ class Api:
 
 
 def naming_safe(name: str) -> str:
-    """Keep the coach's wording ("bc clip 1") but drop what Windows forbids."""
+    """Keep the coach's wording ("game clip 1") but drop what Windows forbids."""
     bad = '<>:"/\\|?*'
     return "".join("_" if ch in bad or ord(ch) < 32 else ch for ch in name).strip(" .")
 

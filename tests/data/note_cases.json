@@ -1,8 +1,8 @@
 [
  {
-  "name": "real Dunloy note",
-  "text": "Dunloy clips\n1:52-2:10\n3:05-3:33\n5:41-5:57\n6:23-7:07\n7:34-8:09\n12:36-13:05\n14:08-14:29\n16:20-16:34\n17:24-17:36\n19:19-19:34\n25:03-25:37\n\n\n2nd Half Video\n3:04-3:37\n5:55-6:30\n9:32-9:46\n15:07-15:39\n",
-  "title": "Dunloy clips",
+  "name": "a real note: one video per half",
+  "text": "Match clips\n1:52-2:10\n3:05-3:33\n5:41-5:57\n6:23-7:07\n7:34-8:09\n12:36-13:05\n14:08-14:29\n16:20-16:34\n17:24-17:36\n19:19-19:34\n25:03-25:37\n\n\n2nd Half Video\n3:04-3:37\n5:55-6:30\n9:32-9:46\n15:07-15:39\n",
+  "title": "Match clips",
   "sections": [
    [
     "h1",
@@ -16,9 +16,9 @@
   "problems": []
  },
  {
-  "name": "real Ballycastle note: two videos, each from both halves",
-  "text": "Video Ballycastle \n\n3:43-4:01\n11:26-11:40\n11:50-12:13\n15:51-16:21\n16:32-17:00\n2nd Half\n3:10-3:34\n12:36-13:09\n26:58-27:16\n32:00-32:12\n\n\n\n2nd Video\n\n6:56-7:07\n17:38-17:59\n2nd half \n5:05-5:15\n5:33-5:44\n6:33-6:47\n6:58-7:12\n7:23-7:50\n8:05-8:21\n",
-  "title": "Video Ballycastle",
+  "name": "a real note: two videos, each from both halves",
+  "text": "Video Final \n\n3:43-4:01\n11:26-11:40\n11:50-12:13\n15:51-16:21\n16:32-17:00\n2nd Half\n3:10-3:34\n12:36-13:09\n26:58-27:16\n32:00-32:12\n\n\n\n2nd Video\n\n6:56-7:07\n17:38-17:59\n2nd half \n5:05-5:15\n5:33-5:44\n6:33-6:47\n6:58-7:12\n7:23-7:50\n8:05-8:21\n",
+  "title": "Video Final",
   "sections": [
    [
     "h1",
@@ -31,7 +31,7 @@
   ],
   "problems": [],
   "groups": [
-   "Video Ballycastle",
+   "Video Final",
    "2nd Video"
   ],
   "clip_groups": [
@@ -56,7 +56,7 @@
  },
  {
   "name": "separators, spacing, labels",
-  "text": "1:52 - 2:10\n3:05–3:33 Goal Conor\n4:00 to 4:20: point\n5:00—5:10",
+  "text": "1:52 - 2:10\n3:05–3:33 Goal No 11\n4:00 to 4:20: point\n5:00—5:10",
   "title": "",
   "sections": [
    [
@@ -74,7 +74,7 @@
    [
     185,
     213,
-    "Goal Conor"
+    "Goal No 11"
    ],
    [
     240,
@@ -90,8 +90,8 @@
  },
  {
   "name": "periods",
-  "text": "Cushendall v St Endas\nFirst half\n1:00-1:10\nSecond Half\n2:00-2:10\nExtra time 1\n0:30-0:40\nET2\n1:00-1:20\nPenalties\n0:10-0:20",
-  "title": "Cushendall v St Endas",
+  "text": "Home v Away\nFirst half\n1:00-1:10\nSecond Half\n2:00-2:10\nExtra time 1\n0:30-0:40\nET2\n1:00-1:20\nPenalties\n0:10-0:20",
+  "title": "Home v Away",
   "sections": [
    [
     "h1",
@@ -118,8 +118,8 @@
  },
  {
   "name": "plain text after clips = new recording",
-  "text": "Dunloy\n1:00-1:10\nCamera two\n2:00-2:10",
-  "title": "Dunloy",
+  "text": "Final\n1:00-1:10\nCamera two\n2:00-2:10",
+  "title": "Final",
   "sections": [
    [
     "h1",
@@ -223,8 +223,8 @@
  },
  {
   "name": "iPhone Notes soft line breaks",
-  "text": "Dunloy 1:52-2:10 2nd Half Video 3:04-3:371:00-1:10",
-  "title": "Dunloy",
+  "text": "Final 1:52-2:10 2nd Half Video 3:04-3:371:00-1:10",
+  "title": "Final",
   "sections": [
    [
     "h1",
@@ -239,8 +239,8 @@
  },
  {
   "name": "video lines without a video title",
-  "text": "Dunloy clips\n1:00-1:10\nSecond half\n2:00-2:10\nVideo 2\n1:00-1:10\n",
-  "title": "Dunloy clips",
+  "text": "Match clips\n1:00-1:10\nSecond half\n2:00-2:10\nVideo 2\n1:00-1:10\n",
+  "title": "Match clips",
   "sections": [
    [
     "h1",
@@ -264,8 +264,8 @@
  },
  {
   "name": "one video line is just a title",
-  "text": "Video Ballycastle\n1:00-1:10\n2nd half\n2:00-2:10\n",
-  "title": "Video Ballycastle",
+  "text": "Video Final\n1:00-1:10\n2nd half\n2:00-2:10\n",
+  "title": "Video Final",
   "sections": [
    [
     "h1",
@@ -281,8 +281,8 @@
  },
  {
   "name": "2nd Half Video names a half, not a new video",
-  "text": "Dunloy\n1:00-1:10\n2nd Half Video\n2:00-2:10\n",
-  "title": "Dunloy",
+  "text": "Final\n1:00-1:10\n2nd Half Video\n2:00-2:10\n",
+  "title": "Final",
   "sections": [
    [
     "h1",
@@ -298,8 +298,8 @@
  },
  {
   "name": "video names written above their clips",
-  "text": "Dunloy\nVideo 1\n1:00-1:10\n2nd half\n2:00-2:10\nVideo 2\n1:30-1:40\n",
-  "title": "Dunloy",
+  "text": "Final\nVideo 1\n1:00-1:10\n2nd half\n2:00-2:10\nVideo 2\n1:30-1:40\n",
+  "title": "Final",
   "sections": [
    [
     "h1",

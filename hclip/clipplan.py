@@ -98,7 +98,7 @@ def period_key(text: str) -> tuple[str, int | None] | None:
 
 def reel_header(line: str) -> str | None:
     """The reel's name if this line starts one: "reel 2", "Reel 6 - forwards",
-    "bc clip 1", "2nd Video", "Video Ballycastle". None otherwise. ("2nd
+    "game clip 1", "2nd Video", "Video Final". None otherwise. ("2nd
     Half Video" names a half, not a reel.)"""
     words = _words(line)
     joined = " ".join(words)
@@ -111,10 +111,10 @@ def reel_header(line: str) -> str | None:
         return f"reel {int(m[1])} - {rest_raw}"
     if joined.startswith(("reel", "reeel", "rell")) and len(words) <= 3:
         return line.strip(_SEPARATORS) or "reel"
-    if len(words) <= 4 and re.search(r"\bclips?\s*\d+$", joined):   # "Clip 2", "bc clip 1"
+    if len(words) <= 4 and re.search(r"\bclips?\s*\d+$", joined):   # "Clip 2", "game clip 1"
         return line.strip(_SEPARATORS)
     # The coach's older notes: "2nd Video", "Video 3" start a reel. (A video
-    # named before any clips, like "Video Ballycastle", is handled in parse().)
+    # named before any clips, like "Video Final", is handled in parse().)
     if period_key(line) is None and re.fullmatch(
             r"(?:\d+(?:st|nd|rd|th)?|first|second|third|fourth|fifth|next|another)\s+videos?"
             r"|videos?\s*(?:\d+|one|two|three|four|five)", joined):
@@ -236,7 +236,7 @@ def parse(text: str, labels: Sequence[str],
         name = reel_header(line)
         if name is None and "video" in _words(line) and period_key(line) is None \
                 and not any(r.rows for r in reels):
-            name = line.strip(_SEPARATORS)          # "Video Ballycastle" above the first clip
+            name = line.strip(_SEPARATORS)          # "Video Final" above the first clip
         if name is not None:
             start_reel(name)
             rest = re.sub(r"(?i)^\W*(?:reel|reeel|rell)\s*\d+", "", line)

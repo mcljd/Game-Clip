@@ -56,7 +56,7 @@ CASES = {
         "☐ 3:43-4:01\n✓ 3:43-4:01\n-3:43-4:01\n    3:43-4:01\n1.52-2.10",
         [H1] * 11, []),
     "words before, after, or both": (
-        "1st half\nGoal 3:43-4:01\n3:43-4:01 Point - Conor\n3:43-4:01: great score\nnice one 3:43-4:01 wide",
+        "1st half\nGoal 3:43-4:01\n3:43-4:01 Point - No 11\n3:43-4:01: great score\nnice one 3:43-4:01 wide",
         [H1] * 4, []),
     "a header and a clip on the same line": (
         "2nd half 3:10-3:34\n1st half: 1:00-1:10 goal", [H2, H1], []),
@@ -77,12 +77,12 @@ CASES = {
         [("reel 1", H1), ("reel 2", H1), ("reel 3", H1), ("reel 4", H1), ("reel 5", H1),
          ("reel 6 - forwards", H1), ("reel 7", H2), ("reel 8", H1), ("reel 9", H2)], []),
     "reels named like the output files": (
-        "bc clip 1\n1st half\n1:00-1:10\nbc clip 2\n2nd half\n2:00-2:10\nClip 3\n1st half\n3:00-3:10",
-        [("bc clip 1", H1), ("bc clip 2", H2), ("Clip 3", H1)], []),
+        "game clip 1\n1st half\n1:00-1:10\ngame clip 2\n2nd half\n2:00-2:10\nClip 3\n1st half\n3:00-3:10",
+        [("game clip 1", H1), ("game clip 2", H2), ("Clip 3", H1)], []),
     "the coach's older 'Video' lines": (
-        "Video Ballycastle\n1st half\n3:43-4:01\n2nd Half\n3:10-3:34\n2nd Video\n1st half\n6:56-7:07\n"
+        "Video Final\n1st half\n3:43-4:01\n2nd Half\n3:10-3:34\n2nd Video\n1st half\n6:56-7:07\n"
         "Video 3\n2nd half\n1:00-1:10\nnext video\n1st half\n1:00-1:10",
-        [("Video Ballycastle", H1), ("Video Ballycastle", H2), ("2nd Video", H1),
+        [("Video Final", H1), ("Video Final", H2), ("2nd Video", H1),
          ("Video 3", H2), ("next video", H1)], []),
     "'video' in a note isn't a new reel": (
         "1st half\n1:00-1:10\nvideo ref\n1:20-1:30\nclipped the bar\n1:40-1:50",
@@ -91,8 +91,8 @@ CASES = {
 
     # ------------------------------------------------------------- other lines
     "titles and notes are listed, not lost": (
-        "Ballycastle v Cushendall\n1st half\n1:00-1:10\ngood hook here\nscored at 3:43\n17",
-        [H1], ["Ballycastle v Cushendall", "good hook here", "scored at 3:43", "17"]),
+        "Home v Away\n1st half\n1:00-1:10\ngood hook here\nscored at 3:43\n17",
+        [H1], ["Home v Away", "good hook here", "scored at 3:43", "17"]),
     "blank lines, spaces, CRLF and iPhone line breaks": (
         "reel 1\r\n\r\n   1st half   \r\n 1:00-1:10  2nd half 2:00-2:10\r\n\r\n",
         [H1, H2], []),
@@ -128,9 +128,9 @@ def test_input(name):
 # ----------------------------------------------------------- details that matter
 
 def test_text_screens_come_from_the_words_with_each_clip():
-    plan = clipplan.parse("1st half\nGoal 3:43-4:01\n3:43-4:01 - Point - Conor\n"
+    plan = clipplan.parse("1st half\nGoal 3:43-4:01\n3:43-4:01 - Point - No 11\n"
                           "3:43-4:01 goal, 5:00-5:10 point\n2nd half 6:00-6:10 wide", LABELS)
-    assert [r.text for r in plan.rows] == ["Goal", "Point - Conor", "goal", "point", "wide"]
+    assert [r.text for r in plan.rows] == ["Goal", "Point - No 11", "goal", "point", "wide"]
     # Only a clip alone on a plain "range text" line can have its text edited in place.
     assert [r.own_line for r in plan.rows] == [False, True, False, False, False]
 
@@ -152,7 +152,7 @@ def test_broken_rows_say_what_is_wrong():
 
 
 def test_custom_labels():
-    labels = ["Cushendall 1st half.m4v", "Cushendall 2nd half.m4v", "Drone"]
+    labels = ["Match 1st half.m4v", "Match 2nd half.m4v", "Drone"]
     got, _ = rows("First half\n1:00-1:10\nH2\n1:20-1:30\ndrone\n1:40-1:50", labels)
     assert [g[2] for g in got] == [0, 1, 2]
 
