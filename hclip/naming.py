@@ -11,7 +11,7 @@ _MAX_LABEL = 40
 
 
 def slugify(text: str, max_len: int = _MAX_LABEL) -> str:
-    """'Point - J McLaughlin' -> 'point_j_mclaughlin'. Irish fadas are folded
+    """'Point - No 11' -> 'point_no_11'. Irish fadas are folded
     (Ó -> o) so names survive any filesystem or zip tool."""
     text = unicodedata.normalize("NFKD", text)
     text = text.encode("ascii", "ignore").decode("ascii").lower()

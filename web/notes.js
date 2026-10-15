@@ -11,6 +11,8 @@
   const TIMEISH_RE = /^\s*\d{1,3}[:.]\d/;
   const TIME_RE = /^(\d{1,3})[:.](\d{2})(?:[:.](\d{2}))?$/;
   const LONG_CLIP_SECONDS = 90;
+  // Same set as hclip/notes.py, including iPhone Notes' U+2028 soft breaks.
+  const LINE_BREAK = /\r\n|[\n\r\u2028\u2029\x85]/;
 
   class TimecodeError extends Error {}
 
@@ -54,11 +56,18 @@
     return null;
   }
 
+  // A line naming an output video ("2nd Video", "Video Final"), as
+  // opposed to a half ("2nd Half Video" names a half). Same rule as notes.py.
+  const isVideoHeader = (line) => /\bvideo\b/i.test(line) && sectionTag(line, 1) === null;
+
   function parse(text) {
-    let title = "";
+    let title = "", titleIsVideo = false;
     const sections = [];
     const problems = [];
     let current = null;
+    const groups = [];          // names of groups after the first
+    let firstName = "";         // a "Video 1" line naming the first group
+    let group = 0, groupHasClips = false;
 
     const newSection = (name) => {
       const pos = sections.length + 1;
@@ -66,8 +75,13 @@
       sections.push(s);
       return s;
     };
+    // The section for a half: the same one each time it's named.
+    const periodSection = (name) => {
+      const tag = sectionTag(name, sections.length + 1);
+      return sections.find((s) => s.tag === tag) || newSection(name);
+    };
 
-    const lines = text.split(/\r\n|\r|\n/);
+    const lines = text.split(LINE_BREAK);
     lines.forEach((raw, i) => {
       const lineno = i + 1;
       const line = raw.trim();
@@ -83,17 +97,18 @@
           problems.push({ line: lineno, message: `ends (${endS}) before it starts (${startS}). This line is skipped.`, fatal: true });
           return;
         }
-        if (!current) current = newSection("1st Half");
-        const clip = { start, end, label, line: lineno };
+        if (!current) current = periodSection("1st Half");
+        const clip = { start, end, label, line: lineno, group };
         if (end - start > LONG_CLIP_SECONDS) {
           problems.push({ line: lineno, message: `this clip is ${fmt(end - start)} long - is that a typo?`, fatal: false });
         }
         for (const o of current.clips) {
-          if (clip.start < o.end && o.start < clip.end) {
+          if (o.group === group && clip.start < o.end && o.start < clip.end) {
             problems.push({ line: lineno, message: `overlaps the clip on line ${o.line}`, fatal: false });
           }
         }
         current.clips.push(clip);
+        groupHasClips = true;
         return;
       }
 
@@ -102,21 +117,34 @@
         return;
       }
 
-      const isPeriod = sectionTag(line, sections.length + 1) !== null;
-      if (isPeriod && (!current || current.clips.length)) current = newSection(line);
-      else if (isPeriod) { current.name = line; current.tag = sectionTag(line, sections.length) || current.tag; }
-      else if (!current && !title) title = line;
-      else if (current && current.clips.length) current = newSection(line);
+      if (sectionTag(line, sections.length + 1) !== null) {
+        current = periodSection(line);
+        if (!current.clips.length) current.name = line;   // header right after another: keep the latest wording
+      } else if (isVideoHeader(line) && groupHasClips) {
+        groups.push(line);
+        group += 1;
+        groupHasClips = false;
+        current = null;                                  // each video starts from the 1st half
+      } else if (isVideoHeader(line) && title) {
+        // A video's name written before its first clip ("Final" then "Video 1").
+        if (group === 0) firstName = line; else groups[groups.length - 1] = line;
+      } else if (!current && !title) {
+        title = line;
+        titleIsVideo = isVideoHeader(line);
+      } else if (current && current.clips.length) current = newSection(line);
     });
 
     const kept = sections.filter((s) => s.clips.length);
+    const used = new Set(kept.flatMap((s) => s.clips.map((c) => c.group)));
+    const names = used.size > 1 ? [firstName || (titleIsVideo ? title : "1st Video"), ...groups] : [];
     const seen = {};
     for (const s of kept) {
       if (seen[s.tag]) { seen[s.tag] += 1; s.tag = `${s.tag}_${seen[s.tag]}`; }
       else seen[s.tag] = 1;
     }
     return {
-      title, sections: kept, problems,
+      title, sections: kept, problems, groups: names,
+      clips: kept.flatMap((s) => s.clips).sort((a, b) => a.line - b.line),
       clipCount: kept.reduce((n, s) => n + s.clips.length, 0),
     };
   }
@@ -135,7 +163,21 @@
     return parts.join("_") + ".mp4";
   }
 
-  const api = { parse, parseTime, fmt, fmtFilename, sectionTag, slugify, clipFilename, TimecodeError };
+  const LEAD_RE = new RegExp(String.raw`^(\s*${TIME}\s*(?:-+|–|—|to)\s*${TIME})`, "i");
+
+  /** Set the text shown before the clip on ``lineNo`` (1-based), keeping the
+   *  coach's own times and every other line exactly as typed. */
+  function setLabel(text, lineNo, label) {
+    const nl = text.includes("\r\n") ? "\r\n" : "\n";
+    const lines = text.split(LINE_BREAK);
+    const m = LEAD_RE.exec(lines[lineNo - 1] || "");
+    if (!m) return text;
+    const clean = String(label).replace(/[\r\n]+/g, " ").trim();
+    lines[lineNo - 1] = clean ? `${m[1]} ${clean}` : m[1];
+    return lines.join(nl);
+  }
+
+  const api = { parse, setLabel, parseTime, fmt, fmtFilename, sectionTag, slugify, clipFilename, TimecodeError };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Notes = api;
 })(typeof self !== "undefined" ? self : this);

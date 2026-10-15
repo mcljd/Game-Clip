@@ -12,8 +12,8 @@ jobs:
   test-linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
@@ -24,11 +24,11 @@ jobs:
     name: web (iPhone/browser version)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
@@ -38,7 +38,7 @@ jobs:
       - run: pip install -e ".[dev]" playwright
       - run: python -m playwright install --with-deps chromium
       - name: End-to-end in headless Chromium (real ffmpeg.wasm)
-        run: pytest -q tests/test_web_e2e.py -rs
+        run: pytest -q tests/test_web_e2e.py tests/test_app_ui.py -rs
 
   windows:
     runs-on: windows-latest
@@ -46,8 +46,8 @@ jobs:
       run:
         shell: pwsh
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -91,6 +91,9 @@ jobs:
           $p = Start-Process -FilePath $exe -ArgumentList "--selftest", "$PWD\selftest.txt" -Wait -PassThru
           Get-Content selftest.txt
           if ($p.ExitCode -ne 0) { throw "selftest failed ($($p.ExitCode))" }
+          $v = (Get-Item $exe).VersionInfo
+          "Company: $($v.CompanyName) | Product: $($v.ProductName) $($v.ProductVersion) | $($v.LegalCopyright)"
+          if ($v.CompanyName -ne "Joseph McLaughlin") { throw "exe author details missing" }
 
       - name: Build installer
         run: |

@@ -40,7 +40,8 @@
       } catch (_) { this.db = null; }
     }
 
-    /** rec: {key: "<match>/<file name>", match, name, blob, ...} */
+    /** rec: {key, kind: "reel" | "clip" | "piece", match, name, blob, ...}.
+     *  Pieces are the parts of a reel still being made (kept for resuming). */
     async put(rec) {
       if (!this.db) { this.mem.set(rec.key, rec); return rec; }
       await tx(this.db, "readwrite", (s) => s.put(rec));
@@ -59,6 +60,11 @@
     }
 
     async has(key) { return !!(await this.get(key)); }
+
+    async delete(key) {
+      this.mem.delete(key);
+      if (this.db) await tx(this.db, "readwrite", (s) => s.delete(key));
+    }
 
     async clear() {
       this.mem.clear();

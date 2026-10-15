@@ -1,14 +1,18 @@
 ; Inno Setup script: builds GAA-Clips-Setup.exe from dist\GAA Clips\.
 ; Installs per-user (no admin password needed - club laptops often lack it).
 #ifndef AppVersion
-  #define AppVersion "0.1.0"
+  #define AppVersion "0.2.0"
 #endif
 
 [Setup]
 AppId={{6E2F3B1C-3C8B-4C51-9C1E-7A0D9E5B2A41}
 AppName=GAA Clips
 AppVersion={#AppVersion}
-AppPublisher=Game-Clip
+AppPublisher=Joseph McLaughlin
+AppCopyright=© 2026 Joseph McLaughlin
+VersionInfoCompany=Joseph McLaughlin
+VersionInfoDescription=GAA Clips installer
+SetupIconFile=icon.ico
 DefaultDirName={localappdata}\Programs\GAA Clips
 DefaultGroupName=GAA Clips
 DisableProgramGroupPage=yes

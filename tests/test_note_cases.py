@@ -15,6 +15,10 @@ def test_case(case):
     assert note.title == case["title"]
     assert [[s.tag, len(s.clips)] for s in note.sections] == case["sections"]
     assert [[p.line, p.fatal] for p in note.problems] == case["problems"]
+    if "groups" in case:
+        assert note.groups == case["groups"]
+    if "clip_groups" in case:
+        assert [c.group for c in note.clips] == case["clip_groups"]
     if "clips" in case:
         got = [[c.start, c.end, c.label] for s in note.sections for c in s.clips]
         assert got == case["clips"]

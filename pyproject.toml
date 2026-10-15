@@ -4,10 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hclip"
-version = "0.1.0"
+version = "0.2.0"
 description = "Cut GAA match clips from a coach's list of timings"
 readme = "README.md"
 requires-python = ">=3.11"
+authors = [{ name = "Joseph McLaughlin" }]
 dependencies = []
 
 [project.optional-dependencies]

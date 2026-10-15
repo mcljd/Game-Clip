@@ -2,8 +2,8 @@ from hclip import naming
 
 
 def test_slugify():
-    assert naming.slugify("Point - J McLaughlin") == "point_j_mclaughlin"
-    assert naming.slugify("Seán Ó Dónaill!") == "sean_o_donaill"
+    assert naming.slugify("Point - No 11") == "point_no_11"
+    assert naming.slugify("Cúl ó phoc saor!") == "cul_o_phoc_saor"
     assert naming.slugify("  ") == ""
     assert naming.slugify('a/b\\c:d*e?"<>|') == "a_b_c_d_e"
 

@@ -30,12 +30,36 @@ def test_precise_reencodes():
     assert "-avoid_negative_ts" not in cmd
 
 
-def test_concat_input():
+def test_single_file_seeks_before_input():
+    cmd = ffmpeg.build_cut_cmd("ffmpeg", "in.mp4", 90, 5, "o")
+    assert cmd.index("-ss") < cmd.index("-i")   # input seek: near-instant on huge files
+
+
+def test_concat_input_starts_at_inpoint_not_ss():
+    # -ss can't seek in a joined input: it would copy everything from the
+    # start of the half. The list itself starts at the clip (inpoint).
     cmd = ffmpeg.build_cut_cmd("ffmpeg", "list.ffconcat", 0, 5, "o", is_concat=True)
     i = cmd.index("-i")
     assert cmd[i - 4:i + 2] == ["-f", "concat", "-safe", "0", "-i", "list.ffconcat"]
-    # seek must come before the input for speed
-    assert cmd.index("-ss") < cmd.index("-f")
+    assert "-ss" not in cmd
+
+
+def test_concat_reencode_trims_lead_in():
+    cmd = ffmpeg.build_cut_cmd("ffmpeg", "l.ffconcat", 0, 5, "o", is_concat=True, precise=True)
+    assert "-copyts" in cmd and "trim=start=0:duration=5.000" in cmd[cmd.index("-vf") + 1]
+    look = ffmpeg.Look(1280, 720)
+    enc = ffmpeg.build_encode_clip_cmd("ffmpeg", "l.ffconcat", 0, 5, "o", look, is_concat=True)
+    assert "-copyts" in enc and "-ss" not in enc
+    assert enc[enc.index("-vf") + 1].startswith("trim=start=0")
+    assert enc[enc.index("-af") + 1].startswith("atrim=start=0")
+
+
+def test_concat_list_inpoint(tmp_path):
+    text = ffmpeg.write_concat_list([tmp_path / "a.mp4", tmp_path / "b.mp4"],
+                                    tmp_path / "l.txt", inpoint=95.5).read_text()
+    lines = text.splitlines()
+    assert lines[1].endswith("a.mp4'") and lines[2] == "inpoint 95.500"
+    assert not any(line.startswith("inpoint") for line in lines[3:])
 
 
 def test_gopro_chapter_order():
@@ -110,3 +134,29 @@ def test_hevc_gets_apple_tag_in_copy_mode_only():
     cmd = ffmpeg.build_cut_cmd("ffmpeg", "iphone.mov", 0, 5, "o", hevc=True)
     assert cmd[cmd.index("-tag:v") + 1] == "hvc1"
     assert "-tag:v" not in ffmpeg.build_cut_cmd("ffmpeg", "i.mov", 0, 5, "o", hevc=True, precise=True)
+
+
+def test_stalled_ffmpeg_is_killed_even_when_silent(tmp_path):
+    """A process that hangs without printing anything is still stopped."""
+    import sys, time as _t
+    t = _t.monotonic()
+    with pytest.raises(ffmpeg.FFmpegError, match="stopped making progress"):
+        ffmpeg.run([sys.executable, "-c", "import time; time.sleep(30)"], stall_seconds=1)
+    assert _t.monotonic() - t < 5
+
+
+def test_stop_is_prompt_even_when_silent():
+    import sys, time as _t
+    t = _t.monotonic()
+    with pytest.raises(ffmpeg.Cancelled):
+        ffmpeg.run([sys.executable, "-c", "import time; time.sleep(30)"],
+                   should_stop=lambda: _t.monotonic() - t > 0.5)
+    assert _t.monotonic() - t < 3
+
+
+def test_card_input_is_time_limited():
+    cmd = ffmpeg.build_card_cmd("ffmpeg", "c.png", 3, "o.mp4", ffmpeg.Look(320, 180))
+    i = cmd.index("-i")
+    assert cmd[i - 2:i] == ["-t", "3.000"]
+    j = cmd.index("anullsrc=r=48000:cl=stereo")
+    assert cmd[j - 5:j - 3] == ["-t", "3.000"]   # the silence ends too

@@ -1,6 +1,7 @@
 {
   "name": "GAA Clips",
   "short_name": "GAA Clips",
+  "author": "Joseph McLaughlin",
   "description": "Cut match clips from a coach's list of timings. Videos never leave your device.",
   "start_url": "./",
   "scope": "./",
@@ -9,6 +10,7 @@
   "theme_color": "#6e1423",
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
